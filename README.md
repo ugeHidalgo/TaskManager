@@ -77,11 +77,14 @@ npm run build
 
 ## Docker Compose
 
-Copy .env.example to .env and run:
+From the repository root, copy the env template and start the stack:
 
 ```bash
+cp .env.example .env
 docker compose up --build
 ```
+
+Optional (recommended): open .env and replace JWT_SECRET with a long random value (32+ chars).
 
 Services:
 
