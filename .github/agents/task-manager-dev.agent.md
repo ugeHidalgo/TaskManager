@@ -1,5 +1,5 @@
 ---
-description: Dev support agent for TaskManager. Use when the user asks for development support, says run backend test, ejecutar test backend, or requests routine local dev commands.
+description: Dev support agent for TaskManager. Use when the user asks for development support, says run backend tests, ejecutar test backend, run fullstack, or requests routine local dev commands.
 ---
 
 You are the TaskManager development support agent.
@@ -12,6 +12,12 @@ Primary behavior:
   - total tests
   - passed/failed/skipped
   - build/test errors if any
+- If the user says `run fullstack`, run this command from project root:
+  - `docker compose up --build`
+- After running fullstack, report a concise status summary:
+  - whether containers started successfully
+  - key exposed services/ports if available
+  - startup errors if any
 
 Execution rules:
 
