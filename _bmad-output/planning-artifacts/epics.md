@@ -461,3 +461,124 @@ So that I trust the board state while reprioritizing tasks.
 **When** active tasks are reordered
 **Then** completed minimized gray tasks remain visible and reopenable
 **And** completion behavior remains consistent with Epic 2
+
+## Epic 4: Time and Work-Mode Accountability
+
+Add operational day controls for multiple time-entry pairs and remote-work marking, with validation feedback that supports end-of-day closure.
+
+### Story 4.1: Capture Multiple Time Entry Pairs per Day
+
+As a planner,
+I want to register multiple entry and exit pairs for each day,
+So that I can track split work sessions accurately.
+
+**Acceptance Criteria:**
+
+**Given** a selected day
+**When** user adds a time pair
+**Then** entry and exit fields are available in HH:mm format
+**And** the pair is associated to that day context
+
+**Given** existing pairs for a day
+**When** user adds another pair
+**Then** multiple pairs are supported and displayed
+**And** display order is chronological
+
+**Given** a saved day with pairs
+**When** board reloads
+**Then** all persisted pairs are restored correctly
+**And** no pair is silently dropped
+
+**Given** edit or delete on an existing pair
+**When** operation completes
+**Then** change persists
+**And** UI reflects updated totals immediately
+
+### Story 4.2: Validate Incomplete or Invalid Time Registrations
+
+As a planner,
+I want clear validation for incomplete or invalid time records,
+So that I can fix errors before considering a day complete.
+
+**Acceptance Criteria:**
+
+**Given** a pair with missing exit
+**When** user leaves editor or saves
+**Then** day shows incomplete-time error state
+**And** day cannot be considered validly complete
+
+**Given** invalid HH:mm input
+**When** user submits
+**Then** field-level validation appears
+**And** invalid value is not persisted
+
+**Given** overlapping or logically inconsistent ranges
+**When** user saves
+**Then** validation blocks save
+**And** an actionable error is shown
+
+**Given** no time pairs for a working day
+**When** day status is evaluated
+**Then** missing-time visual state is shown
+**And** state is visible from board level
+
+**Given** accessibility constraints
+**When** errors are displayed
+**Then** errors are conveyed by text or icon cues
+**And** error meaning is not color-only
+
+### Story 4.3: Surface Day-Level Time Status in Board
+
+As a planner,
+I want day-level time completeness visible directly in the board,
+So that I can detect pending fixes without opening detailed editors.
+
+**Acceptance Criteria:**
+
+**Given** a day with valid complete pairs
+**When** board renders
+**Then** day header shows compliant time status
+**And** status is understandable at a glance
+
+**Given** a day with incomplete or missing pairs
+**When** board renders
+**Then** day header shows warning or error status
+**And** user can navigate to fix input quickly
+
+**Given** time data changes
+**When** recalculation runs
+**Then** day status updates immediately
+**And** page reload is not required
+
+**Given** mobile and desktop layouts
+**When** board is viewed
+**Then** day-level time status remains visible
+**And** semantics are consistent across breakpoints
+
+### Story 4.4: Track Remote Work per Day
+
+As a planner,
+I want to mark each day as remote or non-remote,
+So that I can keep a reliable record of work mode.
+
+**Acceptance Criteria:**
+
+**Given** day header is visible
+**When** user toggles remote checkbox
+**Then** state updates immediately in UI
+**And** remote state persists
+
+**Given** week navigation and return
+**When** same day is loaded again
+**Then** remote state remains consistent with persisted data
+**And** no unintended reset occurs
+
+**Given** mixed remote and non-remote days in the same week
+**When** board renders
+**Then** each day reflects its own independent state
+**And** day markers are not coupled across days
+
+**Given** API failure on toggle
+**When** persistence fails
+**Then** UI reverts to previous stable state
+**And** a clear error feedback message is shown
