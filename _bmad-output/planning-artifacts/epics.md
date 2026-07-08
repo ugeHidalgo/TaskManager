@@ -1,5 +1,5 @@
 ---
-stepsCompleted: [1, 2]
+stepsCompleted: [1, 2, 3]
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-TaskManager-2026-06-30/prd.md
   - _bmad-output/planning-artifacts/architecture.md
@@ -108,13 +108,23 @@ Add operational day controls for multiple time-entry pairs and remote-work marki
 
 Deliver a working authenticated experience where the user can log in and navigate week-by-week in a persistent Monday-Friday board baseline.
 
-### Story 1.1: Login and Session Bootstrapping
+### Story 1.1: Initialize Workspace from Dual-Starter and Enable Login Baseline
 
 As a single user,
-I want to log in with username and password,
-So that I can access my planning workspace securely.
+I want the project initialized from the selected frontend and backend starters with a working login baseline,
+So that development starts from a valid architecture foundation and I can access my planning workspace securely.
 
 **Acceptance Criteria:**
+
+**Given** the repository is cloned
+**When** setup is executed
+**Then** frontend and backend are initialized from selected starters
+**And** dependencies are installed with runnable local baseline
+
+**Given** environment configuration is required
+**When** developer starts local stack
+**Then** required variables and service wiring are documented and validated
+**And** app boots with frontend, backend, and database connected
 
 **Given** valid credentials
 **When** the user submits login
@@ -135,6 +145,17 @@ So that I can access my planning workspace securely.
 **When** user confirms logout
 **Then** token/session is cleared
 **And** protected routes are no longer accessible
+
+**Implementation Task Checklist (Estimation + DoD):**
+
+1. [ ] Initialize frontend workspace from React + Vite + TypeScript starter and validate local run command. Size: S. DoD: `frontend` project boots locally with documented start command and no startup errors.
+2. [ ] Initialize backend workspace from ASP.NET Core Web API starter with clean-layer folder structure baseline. Size: M. DoD: `backend` builds and runs locally with expected Api/Application/Domain/Infrastructure structure.
+3. [ ] Create Docker Compose with three services (frontend, backend, postgres) and verify inter-service networking. Size: M. DoD: all services start from one compose command and backend can reach postgres.
+4. [ ] Define and document environment variables for JWT, database connection, and service URLs; provide example env files. Size: S. DoD: required env vars are listed, sample files exist, and app runs with sample configuration.
+5. [ ] Set up PostgreSQL database bootstrap and first migration path for auth-related tables only. Size: M. DoD: initial migration is generated and applied successfully against postgres container.
+6. [ ] Implement authentication backend baseline (password hashing, login endpoint, JWT issuance, auth middleware). Size: L. DoD: login endpoint returns valid JWT for correct credentials and rejects invalid credentials with safe errors.
+7. [ ] Implement frontend login flow (form, validation, token storage, guarded route redirect to board). Size: M. DoD: user can log in, token is stored, protected routes are guarded, and redirect to board works.
+8. [ ] Add bootstrap smoke checks: login success, login failure, token restore on reload, and logout session clear. Size: S. DoD: smoke test checklist passes manually or via automated script with clear pass/fail output.
 
 ### Story 1.2: Week Layout with Shared Week Section Above Daily Columns
 
