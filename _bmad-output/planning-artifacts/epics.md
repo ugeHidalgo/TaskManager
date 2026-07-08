@@ -373,3 +373,91 @@ So that I do not accidentally discard in-progress changes.
 **When** user navigates
 **Then** no blocking prompt is shown
 **And** navigation flow remains uninterrupted
+
+## Epic 3: Task Prioritization by Drag and Reorder
+
+Allow users to prioritize work fluidly by reordering tasks within and across day and shared-week lanes with persisted order behavior.
+
+### Story 3.1: Reorder Tasks Within the Same Section
+
+As a planner,
+I want to reorder tasks inside the same day column or shared week section,
+So that I can set priority quickly as my plan changes.
+
+**Acceptance Criteria:**
+
+**Given** multiple tasks in the same section
+**When** user drags a task up or down
+**Then** order updates immediately in the UI
+**And** visual insertion feedback remains clear
+
+**Given** a reorder action succeeds
+**When** save completes
+**Then** new order persists after reload
+**And** ordering is stable between sessions
+
+**Given** reorder fails in backend
+**When** API returns error
+**Then** UI rolls back to last valid order
+**And** a clear actionable error is shown
+
+**Given** keyboard-only usage
+**When** user triggers reorder controls
+**Then** task order can be changed without mouse input
+**And** focus remains predictable after reorder
+
+### Story 3.2: Move Tasks Across Day Columns and Shared Week Section
+
+As a planner,
+I want to move tasks between day columns and the shared week section,
+So that I can reassign work to the right day or keep it flexible for the week.
+
+**Acceptance Criteria:**
+
+**Given** a task in any board section
+**When** user drags it to another day column
+**Then** task is reassigned to destination day
+**And** reassignment persists
+
+**Given** a task in a day column
+**When** user moves it to shared week section
+**Then** task becomes week-scoped and not day-specific
+**And** reassignment persists
+
+**Given** a task in shared week section
+**When** user moves it to a day column
+**Then** task becomes day-scoped
+**And** destination day assignment persists
+
+**Given** cross-section move completes
+**When** board recalculates
+**Then** source and destination lists reflect correct order and counts
+**And** no duplicate task entry is displayed
+
+### Story 3.3: Maintain Stable Order Semantics and Visual Feedback
+
+As a planner,
+I want reorder interactions to feel stable and clear,
+So that I trust the board state while reprioritizing tasks.
+
+**Acceptance Criteria:**
+
+**Given** drag starts
+**When** user hovers valid drop zones
+**Then** destination feedback is visible and unambiguous
+**And** invalid targets are clearly non-droppable
+
+**Given** drop completes
+**When** UI settles
+**Then** moved task appears in final position
+**And** subtle confirmation feedback is shown without noisy animation
+
+**Given** concurrent updates or stale client state
+**When** reorder request is processed
+**Then** server resolves order using stable `order_index` semantics
+**And** client syncs to authoritative order
+
+**Given** completed tasks are present
+**When** active tasks are reordered
+**Then** completed minimized gray tasks remain visible and reopenable
+**And** completion behavior remains consistent with Epic 2
