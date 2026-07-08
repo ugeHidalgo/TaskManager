@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 using TaskManager.Api.Contracts;
+using TaskManager.Api.Facades;
 using TaskManager.Application.Auth;
 using TaskManager.Infrastructure;
 using TaskManager.Infrastructure.Persistence;
@@ -11,6 +12,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddScoped<TaskManagerFacade>();
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
     ?? ["http://localhost:5173", "http://127.0.0.1:5173"];
@@ -68,50 +70,15 @@ app.UseCors("FrontendCors");
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Ok(ApiSuccessResponse<object>.Create(new { status = "ok" }, "system")));
+app.MapGet("/health", (TaskManagerFacade facade) => facade.GetHealth());
 
-app.MapPost("/api/v1/auth/login", async (LoginRequest request, IAuthService authService, HttpContext httpContext, CancellationToken cancellationToken) =>
-{
-    if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-    {
-        return Results.BadRequest(ApiErrorResponse.Create(
-            code: "auth.validation",
-            message: "Username and password are required.",
-            requestId: httpContext.TraceIdentifier));
-    }
+app.MapPost("/api/v1/auth/login", (LoginRequest request, IAuthService authService, HttpContext httpContext, CancellationToken cancellationToken, TaskManagerFacade facade) =>
+    facade.LoginAsync(request, authService, httpContext, cancellationToken));
 
-    var token = await authService.LoginAsync(request.Username, request.Password, cancellationToken);
-    if (token is null)
-    {
-        return Results.Json(
-            ApiErrorResponse.Create(
-                code: "auth.invalid_credentials",
-                message: "Invalid username or password.",
-                requestId: httpContext.TraceIdentifier),
-            statusCode: StatusCodes.Status401Unauthorized);
-    }
+app.MapGet("/api/v1/board", [Authorize] (HttpContext httpContext, TaskManagerFacade facade) =>
+    facade.GetBoard(httpContext));
 
-    return Results.Ok(ApiSuccessResponse<AuthToken>.Create(token, httpContext.TraceIdentifier));
-});
-
-app.MapGet("/api/v1/board", [Authorize] (HttpContext httpContext) =>
-{
-    var payload = new
-    {
-        weekStartDate = DateOnly.FromDateTime(DateTime.UtcNow),
-        lanes = Array.Empty<object>(),
-    };
-
-    return Results.Ok(ApiSuccessResponse<object>.Create(payload, httpContext.TraceIdentifier));
-});
-
-app.MapGet("/api/v1/auth/me", [Authorize] (HttpContext httpContext) =>
-{
-    var username = httpContext.User.Identity?.Name
-        ?? httpContext.User.FindFirst("unique_name")?.Value
-        ?? "unknown";
-
-    return Results.Ok(ApiSuccessResponse<object>.Create(new { username }, httpContext.TraceIdentifier));
-});
+app.MapGet("/api/v1/auth/me", [Authorize] (HttpContext httpContext, TaskManagerFacade facade) =>
+    facade.GetCurrentUser(httpContext));
 
 app.Run();
