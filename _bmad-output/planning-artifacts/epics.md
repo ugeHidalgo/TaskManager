@@ -224,3 +224,152 @@ So that my workspace is stable across sessions.
 **When** error is returned
 **Then** structured error envelope is provided
 **And** sensitive internals are not leaked
+
+## Epic 2: Task Lifecycle and Completion
+
+Enable full task execution inside the weekly board through task create/edit/delete, completion marking, recurring tasks, day/week completion status, and safe unsaved-change handling.
+
+### Story 2.1: Create and Edit Tasks in Day and Shared Week Context
+
+As a planner,
+I want to create and edit tasks in day columns or in the shared week section,
+So that I can organize planned work with the right temporal scope.
+
+**Acceptance Criteria:**
+
+**Given** the board is open
+**When** user creates a task
+**Then** task can be assigned to a specific day or to the shared week section
+**And** task appears immediately in the selected location
+
+**Given** a task exists
+**When** user edits title, notes, or context
+**Then** changes are validated and persisted
+**And** updated values are reflected without full page reload
+
+**Given** invalid input such as empty title
+**When** user submits task changes
+**Then** inline validation is shown
+**And** task is not saved until fixed
+
+**Given** successful create or edit
+**When** operation completes
+**Then** board state refreshes consistently
+**And** user receives clear success feedback
+
+### Story 2.2: Keep Completed Tasks Visible and Reopenable
+
+As a planner,
+I want completed tasks to remain visible in the board in a minimized gray style and be reopenable,
+So that I can keep progress context without losing the ability to reactivate work.
+
+**Acceptance Criteria:**
+
+**Given** an active task
+**When** user marks it as completed
+**Then** the task remains in the same board section and position context
+**And** completion state is persisted
+
+**Given** a completed task in the board
+**When** it is rendered
+**Then** it appears minimized and in gray visual style
+**And** title plus essential controls remain visible
+
+**Given** a completed task
+**When** user chooses reopen
+**Then** task returns to active state and normal visual style
+**And** reopened state is persisted
+
+**Given** board reload or navigation back to the same week
+**When** data is loaded
+**Then** completed tasks remain visible with minimized gray style
+**And** tasks can still be reopened
+
+**Given** accessibility mode
+**When** completed style is shown
+**Then** completion state is not indicated by color only
+**And** a non-color cue is provided
+
+### Story 2.3: Manage Recurring Tasks and Daily Checks
+
+As a planner,
+I want recurring tasks and per-day completion checks,
+So that I can track habitual responsibilities across the week.
+
+**Acceptance Criteria:**
+
+**Given** recurring task settings
+**When** user creates or updates a recurring task
+**Then** it appears in the recurring section with expected schedule
+**And** recurring definition is persisted
+
+**Given** a recurring task is due for a day
+**When** user marks it done for that day
+**Then** day-specific completion state is persisted
+**And** other days remain unchanged
+
+**Given** recurring task is not checked for a day
+**When** day closes
+**Then** status remains incomplete for that day only
+**And** completion does not auto-propagate to other days
+
+**Given** recurring data is loaded
+**When** board renders
+**Then** recurring items are visually distinguishable from standard tasks
+**And** interaction behavior remains consistent
+
+### Story 2.4: Compute Day and Week Completion Status
+
+As a planner,
+I want automatic day and week completion indicators,
+So that I can see closure status at a glance.
+
+**Acceptance Criteria:**
+
+**Given** all tasks for a day are complete
+**When** board status recalculates
+**Then** day is marked complete
+**And** day completion indicator appears in day header
+
+**Given** any task in a day becomes incomplete
+**When** board status recalculates
+**Then** day completion marker is removed
+**And** day returns to in-progress state
+
+**Given** all five weekdays are complete
+**When** board status recalculates
+**Then** week completion feedback is shown
+**And** feedback is visible in header priority area
+
+**Given** at least one weekday is incomplete
+**When** board status recalculates
+**Then** week completion feedback is not shown as complete
+**And** state remains consistent after reload
+
+### Story 2.5: Protect Unsaved Changes During Navigation
+
+As a planner,
+I want warnings before losing unsaved edits,
+So that I do not accidentally discard in-progress changes.
+
+**Acceptance Criteria:**
+
+**Given** there are unsaved changes
+**When** user attempts route change, week change, or page leave
+**Then** confirmation modal appears
+**And** navigation is blocked pending user decision
+
+**Given** user cancels navigation
+**When** modal closes
+**Then** current edits remain intact
+**And** user stays in current view
+
+**Given** user confirms discard
+**When** navigation proceeds
+**Then** unsaved changes are dropped safely
+**And** destination view loads without stale draft state
+
+**Given** no unsaved changes
+**When** user navigates
+**Then** no blocking prompt is shown
+**And** navigation flow remains uninterrupted
