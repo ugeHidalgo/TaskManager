@@ -7,13 +7,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "backend", "backend", "{1AE8
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{0F9113EE-888A-26D2-68B0-4A7D0A2A8745}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskManager.Api", "backend\src\TaskManager.Api\TaskManager.Api.csproj", "{D8B2A15A-1325-44F5-9D21-562C8C119F26}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskManager.Api", "src\backend\src\TaskManager.Api\TaskManager.Api.csproj", "{D8B2A15A-1325-44F5-9D21-562C8C119F26}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskManager.Application", "backend\src\TaskManager.Application\TaskManager.Application.csproj", "{6602279A-26E7-4020-8E59-F8DC6CBA60B3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskManager.Application", "src\backend\src\TaskManager.Application\TaskManager.Application.csproj", "{6602279A-26E7-4020-8E59-F8DC6CBA60B3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskManager.Domain", "backend\src\TaskManager.Domain\TaskManager.Domain.csproj", "{C951440C-5366-4EB3-A19F-71C668EAC600}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskManager.Domain", "src\backend\src\TaskManager.Domain\TaskManager.Domain.csproj", "{C951440C-5366-4EB3-A19F-71C668EAC600}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskManager.Infrastructure", "backend\src\TaskManager.Infrastructure\TaskManager.Infrastructure.csproj", "{D5E5D788-5D20-4A7A-AF2E-8CD992FE5F7E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskManager.Infrastructure", "src\backend\src\TaskManager.Infrastructure\TaskManager.Infrastructure.csproj", "{D5E5D788-5D20-4A7A-AF2E-8CD992FE5F7E}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{F57642F3-C37C-D174-720E-6A6AAD5BEE22}"
 EndProject

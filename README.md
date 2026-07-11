@@ -24,8 +24,8 @@ Story 1.1 baseline implementation:
 ### Environment Examples
 
 - Root compose variables: .env.example
-- Backend variables: backend/src/TaskManager.Api/.env.example
-- Frontend variables: frontend/.env.example
+- Backend variables: src/backend/src/TaskManager.Api/.env.example
+- Frontend variables: src/frontend/.env.example
 
 ## Backend Commands
 
@@ -39,14 +39,14 @@ Run migration:
 
 ```bash
 dotnet tool run dotnet-ef database update \
-	--project backend/src/TaskManager.Infrastructure/TaskManager.Infrastructure.csproj \
-	--startup-project backend/src/TaskManager.Api/TaskManager.Api.csproj
+	--project src/backend/src/TaskManager.Infrastructure/TaskManager.Infrastructure.csproj \
+	--startup-project src/backend/src/TaskManager.Api/TaskManager.Api.csproj
 ```
 
 Run API:
 
 ```bash
-dotnet run --project backend/src/TaskManager.Api/TaskManager.Api.csproj
+dotnet run --project src/backend/src/TaskManager.Api/TaskManager.Api.csproj
 ```
 
 Default bootstrap credentials (dev only):
@@ -59,7 +59,7 @@ Default bootstrap credentials (dev only):
 Install:
 
 ```bash
-cd frontend
+cd src/frontend
 npm install --cache .npm-cache
 ```
 
