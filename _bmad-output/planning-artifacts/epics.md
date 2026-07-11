@@ -108,11 +108,11 @@ Add operational day controls for multiple time-entry pairs and remote-work marki
 
 Deliver a working authenticated experience where the user can log in and navigate week-by-week in a persistent Monday-Friday board baseline.
 
-### Story 1.1: Initialize Workspace from Dual-Starter and Enable Login Baseline
+### Story 1.1: Initialize Frontend and Backend Starters
 
 As a single user,
-I want the project initialized from the selected frontend and backend starters with a working login baseline,
-So that development starts from a valid architecture foundation and I can access my planning workspace securely.
+I want the project initialized from the selected frontend and backend starters,
+So that development starts from a valid architecture foundation.
 
 **Acceptance Criteria:**
 
@@ -121,14 +121,91 @@ So that development starts from a valid architecture foundation and I can access
 **Then** frontend and backend are initialized from selected starters
 **And** dependencies are installed with runnable local baseline
 
+**Given** the backend starter is initialized
+**When** solution structure is reviewed
+**Then** clean-layer projects are present (Api/Application/Domain/Infrastructure)
+**And** backend build succeeds locally
+
+**Given** the frontend starter is initialized
+**When** development server is started
+**Then** app runs without startup errors
+**And** TypeScript build passes
+
+**Implementation Task Checklist (Estimation + DoD):**
+
+1. [ ] Create frontend project from React + Vite + TypeScript starter. Size: S. DoD: frontend dev server starts and renders default app.
+2. [ ] Create backend project from ASP.NET Core Web API starter and clean-layer structure. Size: M. DoD: solution contains Api/Application/Domain/Infrastructure and builds successfully.
+3. [ ] Add workspace-level run/build commands to README. Size: S. DoD: documented commands can be executed on a clean environment.
+
+### Story 1.2: Provision Local Runtime with Docker Compose and Env Configuration
+
+As a developer,
+I want a reproducible local runtime with frontend, backend, and database services,
+So that the team can run the stack consistently.
+
+**Acceptance Criteria:**
+
 **Given** environment configuration is required
 **When** developer starts local stack
 **Then** required variables and service wiring are documented and validated
 **And** app boots with frontend, backend, and database connected
 
+**Given** Docker Compose configuration exists
+**When** compose is started
+**Then** services frontend, backend, and postgres start successfully
+**And** backend can connect to postgres through service networking
+
+**Given** first backend persistence setup
+**When** migrations are applied
+**Then** initial schema for auth baseline is created
+**And** migration command is documented
+
+**Implementation Task Checklist (Estimation + DoD):**
+
+1. [ ] Create docker-compose topology for frontend, backend, postgres. Size: M. DoD: single compose command starts all services successfully.
+2. [ ] Define environment variables and sample env files for all services. Size: S. DoD: env vars are documented and validated at startup.
+3. [ ] Configure backend database connection and first migration path. Size: M. DoD: migration applies cleanly against postgres container.
+
+### Story 1.3: Implement Authentication Backend Baseline
+
+As a single user,
+I want secure backend authentication endpoints,
+So that session creation and route protection are enforced reliably.
+
+**Acceptance Criteria:**
+
 **Given** valid credentials
 **When** the user submits login
-**Then** API returns a JWT and frontend stores session state
+**Then** API returns a valid JWT
+**And** token contains required claims for protected routes
+
+**Given** invalid credentials
+**When** login is submitted
+**Then** authentication is rejected
+**And** API returns a clear non-sensitive error response
+
+**Given** protected API endpoints
+**When** request has no valid token
+**Then** access is denied consistently
+**And** unauthorized response follows standard error envelope
+
+**Implementation Task Checklist (Estimation + DoD):**
+
+1. [ ] Implement user credential verification with bcrypt hashing. Size: M. DoD: credentials are verified using hashed password storage only.
+2. [ ] Add login endpoint and JWT issuance flow. Size: M. DoD: valid login returns signed JWT with configured expiry.
+3. [ ] Apply auth middleware/policies to protected routes. Size: S. DoD: unauthorized requests are blocked with consistent error contract.
+
+### Story 1.4: Implement Frontend Login and Session Lifecycle
+
+As a single user,
+I want frontend login and session handling,
+So that I can authenticate once and access the board securely.
+
+**Acceptance Criteria:**
+
+**Given** valid credentials
+**When** the user submits login
+**Then** frontend stores session token safely
 **And** user is redirected to the board
 
 **Given** invalid credentials
@@ -148,16 +225,12 @@ So that development starts from a valid architecture foundation and I can access
 
 **Implementation Task Checklist (Estimation + DoD):**
 
-1. [ ] Initialize frontend workspace from React + Vite + TypeScript starter and validate local run command. Size: S. DoD: `frontend` project boots locally with documented start command and no startup errors.
-2. [ ] Initialize backend workspace from ASP.NET Core Web API starter with clean-layer folder structure baseline. Size: M. DoD: `backend` builds and runs locally with expected Api/Application/Domain/Infrastructure structure.
-3. [ ] Create Docker Compose with three services (frontend, backend, postgres) and verify inter-service networking. Size: M. DoD: all services start from one compose command and backend can reach postgres.
-4. [ ] Define and document environment variables for JWT, database connection, and service URLs; provide example env files. Size: S. DoD: required env vars are listed, sample files exist, and app runs with sample configuration.
-5. [ ] Set up PostgreSQL database bootstrap and first migration path for auth-related tables only. Size: M. DoD: initial migration is generated and applied successfully against postgres container.
-6. [ ] Implement authentication backend baseline (password hashing, login endpoint, JWT issuance, auth middleware). Size: L. DoD: login endpoint returns valid JWT for correct credentials and rejects invalid credentials with safe errors.
-7. [ ] Implement frontend login flow (form, validation, token storage, guarded route redirect to board). Size: M. DoD: user can log in, token is stored, protected routes are guarded, and redirect to board works.
-8. [ ] Add bootstrap smoke checks: login success, login failure, token restore on reload, and logout session clear. Size: S. DoD: smoke test checklist passes manually or via automated script with clear pass/fail output.
+1. [ ] Build login form with client-side validation and API integration. Size: S. DoD: valid and invalid submissions show expected behavior.
+2. [ ] Implement guarded routing and post-login redirect to board. Size: S. DoD: protected routes are inaccessible without session.
+3. [ ] Implement token restore on reload and logout session teardown. Size: S. DoD: reload keeps session, logout clears access.
+4. [ ] Add auth smoke checks (success, failure, restore, logout). Size: S. DoD: checks pass with explicit pass/fail evidence.
 
-### Story 1.2: Week Layout with Shared Week Section Above Daily Columns
+### Story 1.5: Week Layout with Shared Week Section Above Daily Columns
 
 As a planner,
 I want a weekly board with a shared week section placed above the daily columns,
@@ -190,7 +263,14 @@ So that I can organize both flexible weekly tasks and day-specific tasks with a 
 **Then** priority order is preserved: week completion, quick add task, quick add time entry, week label/range, next week, previous week
 **And** controls remain available while changing week context
 
-### Story 1.3: Week Navigation and Range Resolution
+**Implementation Task Checklist (Estimation + DoD):**
+
+1. [ ] Implement five day columns and shared week section layout. Size: M. DoD: board renders stable structure for desktop/tablet breakpoints.
+2. [ ] Implement today highlight and accessible focus order. Size: S. DoD: today state is visible and keyboard navigation is coherent.
+3. [ ] Implement empty-state rendering for shared section and day columns. Size: S. DoD: empty board has no visual or interaction regressions.
+4. [ ] Implement prioritized header control order. Size: S. DoD: control order matches UX specification exactly.
+
+### Story 1.6: Week Navigation and Range Resolution
 
 As a planner,
 I want to move to previous and next weeks,
@@ -218,7 +298,13 @@ So that I can review and plan across time.
 **Then** only the latest navigation result is rendered
 **And** stale responses do not overwrite current view
 
-### Story 1.4: Persistence Baseline for Weekly Workspace
+**Implementation Task Checklist (Estimation + DoD):**
+
+1. [ ] Implement previous/next week actions with deterministic 7-day movement. Size: S. DoD: navigation updates selected week and label correctly.
+2. [ ] Implement API query flow using Monday-based week_start_date. Size: M. DoD: backend responses align with requested week context.
+3. [ ] Implement stale-request protection for rapid navigation. Size: S. DoD: only latest request updates visible board state.
+
+### Story 1.7: Persistence Baseline for Weekly Workspace
 
 As a planner,
 I want week context and board data persisted in PostgreSQL,
@@ -245,6 +331,12 @@ So that my workspace is stable across sessions.
 **When** error is returned
 **Then** structured error envelope is provided
 **And** sensitive internals are not leaked
+
+**Implementation Task Checklist (Estimation + DoD):**
+
+1. [ ] Implement week/day persistence model and repository queries. Size: M. DoD: week load returns persisted or valid empty structures.
+2. [ ] Implement success/error response envelope compliance in week endpoints. Size: S. DoD: responses conform to defined contract in all tested scenarios.
+3. [ ] Add integration checks for first-time week load and reload persistence. Size: M. DoD: tests or scripts verify persistence behavior and safe failure handling.
 
 ## Epic 2: Task Lifecycle and Completion
 

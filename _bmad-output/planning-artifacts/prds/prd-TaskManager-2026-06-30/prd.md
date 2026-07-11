@@ -2,7 +2,7 @@
 title: "PRD - Task Manager"
 status: final
 created: "2026-06-30"
-updated: "2026-06-30"
+updated: "2026-07-11"
 ---
 
 # Product Requirements Document: Task Manager
@@ -204,7 +204,7 @@ Tasks can be edited inline (name, description, status, date/time). Time entries 
 ### NFR-1: Containerization & Portability
 
 - Entire app (React frontend + ASP.NET Core backend + PostgreSQL database) runs in Docker.
-- Docker Compose orchestrates three services: `app` (API + frontend assets), `postgres` (database).
+- Docker Compose orchestrates three services: `frontend` (React app), `backend` (ASP.NET Core API), `postgres` (database).
 - App can be deployed to any server or local machine with Docker installed.
 
 ### NFR-2: Accessibility
@@ -228,7 +228,8 @@ Tasks can be edited inline (name, description, status, date/time). Time entries 
 ### NFR-5: Browser Compatibility
 
 - Modern browsers (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+).
-- Mobile browsers: iOS Safari 14+, Chrome Android 90+.
+- Mobile browsers: iOS Safari 14+, Chrome Android 90+ with functional support baseline.
+- MVP optimization target is desktop and tablet; mobile web is supported for core flows but not fully optimized in this phase.
 - Responsive design for tablet and desktop screens.
 
 ### NFR-6: User Experience
