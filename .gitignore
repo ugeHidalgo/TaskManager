@@ -28,3 +28,9 @@ backend/**/obj/
 frontend/node_modules/
 frontend/dist/
 frontend/.npm-cache/
+
+# Frontend local artifacts in current workspace layout
+src/frontend/node_modules/
+src/frontend/dist/
+src/frontend/.vite/
+src/frontend/.npm-cache/
