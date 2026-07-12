@@ -24,6 +24,8 @@ TestResults/
 
 backend/**/bin/
 backend/**/obj/
+src/backend/**/bin/
+src/backend/**/obj/
 
 frontend/node_modules/
 frontend/dist/
