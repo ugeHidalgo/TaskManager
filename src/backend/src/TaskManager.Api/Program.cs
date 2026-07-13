@@ -49,6 +49,47 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Secret)),
             ClockSkew = TimeSpan.FromSeconds(30),
         };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                if (context.Response.HasStarted)
+                {
+                    return;
+                }
+
+                context.HandleResponse();
+                var requestId = context.HttpContext.TraceIdentifier;
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json";
+
+                var payload = ApiErrorResponse.Create(
+                    code: "auth.unauthorized",
+                    message: "Authentication is required.",
+                    requestId: requestId);
+
+                await context.Response.WriteAsJsonAsync(payload, context.HttpContext.RequestAborted);
+            },
+            OnForbidden = async context =>
+            {
+                if (context.Response.HasStarted)
+                {
+                    return;
+                }
+
+                var requestId = context.HttpContext.TraceIdentifier;
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                context.Response.ContentType = "application/json";
+
+                var payload = ApiErrorResponse.Create(
+                    code: "auth.forbidden",
+                    message: "You do not have access to this resource.",
+                    requestId: requestId);
+
+                await context.Response.WriteAsJsonAsync(payload, context.HttpContext.RequestAborted);
+            },
+        };
     });
 
 builder.Services.AddAuthorization();
