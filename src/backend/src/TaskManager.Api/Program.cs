@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using TaskManager.Api.Contracts;
 using TaskManager.Api.Facades;
@@ -14,8 +15,11 @@ builder.Services.AddOpenApi();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddScoped<TaskManagerFacade>();
 
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-    ?? ["http://localhost:5173", "http://127.0.0.1:5173"];
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+if (allowedOrigins == null)
+{
+    allowedOrigins = new[] { "http://localhost:5173", "http://127.0.0.1:5173" };
+}
 
 builder.Services.AddCors(options =>
 {
@@ -28,10 +32,36 @@ builder.Services.AddCors(options =>
     });
 });
 
-var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
-if (string.IsNullOrWhiteSpace(jwtOptions.Secret) || jwtOptions.Secret.Length < 32)
+var jwtSection = builder.Configuration.GetSection(JwtOptions.SectionName);
+var jwtOptions = jwtSection.Get<JwtOptions>();
+if (jwtOptions == null)
 {
-    throw new InvalidOperationException("JWT secret must be configured with at least 32 characters.");
+    jwtOptions = new JwtOptions();
+}
+
+// Validate JWT secret hardening: reject placeholders and weak secrets
+var trimmedSecret = string.Empty;
+if (jwtOptions.Secret != null)
+{
+    trimmedSecret = jwtOptions.Secret.Trim();
+}
+
+var unsafeSecrets = new string[] { "change-me", "default", "test", "password", "secret", "key" };
+var isUnsafe = false;
+foreach (var unsafeSecret in unsafeSecrets)
+{
+    if (trimmedSecret.Contains(unsafeSecret, StringComparison.OrdinalIgnoreCase))
+    {
+        isUnsafe = true;
+        break;
+    }
+}
+
+if (string.IsNullOrWhiteSpace(trimmedSecret) || trimmedSecret.Length < 32 || isUnsafe)
+{
+    throw new InvalidOperationException(
+        "JWT secret must be configured with at least 32 characters and must not contain placeholder values like 'change-me', 'default', 'test', etc. " +
+        "Generate a secure random secret for production use.");
 }
 
 builder.Services
@@ -96,9 +126,15 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+// Initialize database with security-hardened bootstrap
 using (var scope = app.Services.CreateScope())
 {
-    var initializer = scope.ServiceProvider.GetRequiredService<DatabaseInitializer>();
+    var dbContext = scope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+    var passwordHasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+    var bootstrapUserOptions = scope.ServiceProvider.GetRequiredService<IOptions<BootstrapUserOptions>>();
+    var isDevelopment = app.Environment.IsDevelopment();
+    
+    var initializer = new DatabaseInitializer(dbContext, passwordHasher, bootstrapUserOptions, isDevelopment);
     await initializer.InitializeAsync(CancellationToken.None);
 }
 
@@ -118,8 +154,5 @@ app.MapPost("/api/v1/auth/login", (LoginRequest request, IAuthService authServic
 
 app.MapGet("/api/v1/board", [Authorize] (HttpContext httpContext, TaskManagerFacade facade) =>
     facade.GetBoard(httpContext));
-
-app.MapGet("/api/v1/auth/me", [Authorize] (HttpContext httpContext, TaskManagerFacade facade) =>
-    facade.GetCurrentUser(httpContext));
 
 app.Run();
