@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 export interface WeekRange {
   weekStart: Date;
   weekEnd: Date;
@@ -10,9 +8,7 @@ export interface WeekRange {
  * Used to get the current week's Monday-Sunday dates.
  */
 export function useWeekCalculation(date: Date = new Date()): WeekRange {
-  return useMemo(() => {
-    return getWeekRange(date);
-  }, [date.toDateString()]);
+  return getWeekRange(date);
 }
 
 /**

@@ -1,34 +1,24 @@
 import {
-  createContext,
   type PropsWithChildren,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
 } from "react";
 import { getCurrentUser, login as loginRequest } from "../api/auth";
+import { AuthContext } from "./auth-context";
 import { clearToken, getToken, saveToken } from "../lib/session";
 
-interface AuthContextValue {
-  isAuthenticated: boolean;
-  isInitializing: boolean;
-  username: string | null;
-  login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
 export function AuthProvider({ children }: PropsWithChildren) {
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [isInitializing, setIsInitializing] = useState(() =>
+    Boolean(getToken()),
+  );
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
 
   useEffect(() => {
     const token = getToken();
     if (!token) {
-      setIsInitializing(false);
       return;
     }
 
@@ -72,13 +62,4 @@ export function AuthProvider({ children }: PropsWithChildren) {
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth(): AuthContextValue {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-
-  return context;
 }
