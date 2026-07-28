@@ -1,3 +1,6 @@
+/* Board Layout Styles */
+@import "./features/board/styles/board-layout.css";
+
 :root {
   --bg: #f6f8fb;
   --surface: #ffffff;
