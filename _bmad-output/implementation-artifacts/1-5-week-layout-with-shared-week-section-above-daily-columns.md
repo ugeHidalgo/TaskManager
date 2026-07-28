@@ -1,6 +1,6 @@
 # Story 1.5: Week Layout with Shared Week Section Above Daily Columns
 
-Status: ready-for-dev
+Status: in-progress
 
 **Epic:** 1 - Secure Weekly Workspace  
 **Story ID:** 1.5  
@@ -45,43 +45,40 @@ so that I can organize tasks by week and day efficiently.
 
 ### Task 1: Create WeekLayout component structure (AC: 1, 2, 3)
 
-- [ ] Create `frontend/src/features/board/components/WeekLayout.tsx`
-  - [ ] Container with Tailwind grid layout (1 row for week section, 1 row for day columns)
-  - [ ] Accepts `weekData` prop containing:
-    - `weekStart: Date` (Monday of current week)
-    - `weekEnd: Date` (Sunday of current week)
-    - `tasks?: Task[]` (populated in future story)
-  - [ ] Renders WeekSection and DayColumn components
-  - [ ] Responsive grid (full width, overflow handled)
+- [x] Create `frontend/src/features/board/components/WeekLayout.tsx`
+  - [x] Container with CSS grid layout (1 row for week section, 1 row for day columns)
+  - [x] Accepts week props (`weekStart`, `weekEnd`) and task content placeholders (`weekContent`, `dayContent`)
+  - [x] Renders WeekSection and DayColumn components
+  - [x] Responsive grid (full width, overflow handled)
 
-- [ ] Create `frontend/src/features/board/components/WeekSection.tsx`
-  - [ ] Takes full width above daily columns
-  - [ ] Header with "Week Tasks" label + week range display (e.g., "Jul 29 - Aug 4")
-  - [ ] Container for tasks (empty state by default)
-  - [ ] Styling distinguishes it from daily sections (e.g., different background color, border)
+- [x] Create `frontend/src/features/board/components/WeekSection.tsx`
+  - [x] Takes full width above daily columns
+  - [x] Header with "Week Tasks" label + week range display (e.g., "Jul 29 - Aug 4")
+  - [x] Container for tasks (empty state by default)
+  - [x] Styling distinguishes it from daily sections (different background, border, spacing)
 
-- [ ] Create `frontend/src/features/board/components/DayColumn.tsx`
-  - [ ] Receives `date: Date`, `dayName: string` (Mon, Tue, etc.)
-  - [ ] Header with day name and date (e.g., "Monday, Jul 29")
-  - [ ] Container for day-specific tasks (empty state by default)
-  - [ ] Consistent height and equal width within grid
-  - [ ] Subtle visual feedback (hover state, borders) ready for drag-drop future story
+- [x] Create `frontend/src/features/board/components/DayColumn.tsx`
+  - [x] Receives `date: Date`, `dayName: string` (Mon, Tue, etc.)
+  - [x] Header with day name and date (e.g., "Monday, Jul 29")
+  - [x] Container for day-specific tasks (empty state by default)
+  - [x] Consistent height and equal width within grid
+  - [x] Subtle visual feedback (hover state, borders) ready for drag-drop future story
 
 ### Task 2: Integrate WeekLayout into board page (AC: 1, 2)
 
-- [ ] Update `frontend/src/pages/BoardPage.tsx`
-  - [ ] Remove placeholder/test content if any
-  - [ ] Import and use WeekLayout component
-  - [ ] Pass calculated week data:
-    - [ ] Calculate `weekStart` as Monday of current week
-    - [ ] Calculate `weekEnd` as Sunday of current week
-  - [ ] Display week range in page title or header (e.g., "Board - Week of Jul 29")
+- [x] Update `frontend/src/pages/BoardPage.tsx`
+  - [x] Remove placeholder/test content
+  - [x] Import and use WeekLayout component
+  - [x] Pass calculated week data:
+    - [x] Calculate `weekStart` as Monday of current week
+    - [x] Calculate `weekEnd` as Sunday of current week
+  - [x] Display week range in page title/header ("Board - Week of ...")
 
-- [ ] Create `frontend/src/features/board/hooks/useWeekCalculation.ts`
-  - [ ] Export `getWeekRange(date: Date)` → `{ weekStart, weekEnd }`
-  - [ ] Export `formatWeekDisplay(weekStart, weekEnd)` → "Jul 29 - Aug 4" format
-  - [ ] Handle week boundaries correctly (Monday as week start)
-  - [ ] Support current week calculation by default
+- [x] Create `frontend/src/features/board/hooks/useWeekCalculation.ts`
+  - [x] Export `getWeekRange(date: Date)` → `{ weekStart, weekEnd }`
+  - [x] Export `formatWeekDisplay(weekStart, weekEnd)` → "Jul 29 - Aug 4" format
+  - [x] Handle week boundaries correctly (Monday as week start)
+  - [x] Support current week calculation by default
 
 ### Task 3: Build responsive styling and empty states (AC: 2, 3, 4)
 
