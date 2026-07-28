@@ -30,7 +30,7 @@ fi
 echo "PASS: invalid login rejected"
 
 echo "[3/4] Token reuse check"
-ME_STATUS=$(curl -sS -o /tmp/taskmanager_me.json -w "%{http_code}" "${API_BASE_URL}/auth/me" \
+ME_STATUS=$(curl -sS -o /tmp/taskmanager_me.json -w "%{http_code}" "${API_BASE_URL}/board" \
   -H "Authorization: Bearer ${TOKEN}")
 
 if [[ "${ME_STATUS}" != "200" ]]; then
@@ -40,7 +40,7 @@ fi
 echo "PASS: token accepted by protected endpoint"
 
 echo "[4/4] Protected endpoint unauthorized envelope check"
-UNAUTH_STATUS=$(curl -sS -o /tmp/taskmanager_me_unauth.json -w "%{http_code}" "${API_BASE_URL}/auth/me")
+UNAUTH_STATUS=$(curl -sS -o /tmp/taskmanager_me_unauth.json -w "%{http_code}" "${API_BASE_URL}/board")
 
 if [[ "${UNAUTH_STATUS}" != "401" ]]; then
   echo "FAIL: protected endpoint without token expected 401, got ${UNAUTH_STATUS}"
