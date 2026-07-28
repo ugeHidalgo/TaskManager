@@ -50,6 +50,7 @@ development_status:
   1-5-week-layout-with-shared-week-section-above-daily-columns: in-progress
   1-6-week-navigation-and-range-resolution: backlog
   1-7-persistence-baseline-for-weekly-workspace: backlog
+  1-8-toggle-between-workweek-and-full-week-board-view: ready-for-dev
   epic-1-retrospective: optional
 
   epic-2: backlog
