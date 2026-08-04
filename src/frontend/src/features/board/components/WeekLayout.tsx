@@ -40,7 +40,7 @@ export function WeekLayout({
   ];
 
   return (
-    <div className="week-layout" role="main">
+    <div className="week-layout">
       {/* Week section - full width */}
       <WeekSection weekStart={weekStart} weekEnd={weekEnd}>
         {weekContent}

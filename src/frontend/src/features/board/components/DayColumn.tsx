@@ -15,17 +15,25 @@ export interface DayColumnProps {
  */
 export function DayColumn({ date, dayName, children }: DayColumnProps) {
   const formattedDate = formatDate(date);
+  const dayKey = `${dayName.toLowerCase()}-${date.toISOString().slice(0, 10)}`;
+  const headingId = `day-column-title-${dayKey}`;
+  const regionId = `day-column-region-${dayKey}`;
 
   return (
     <section className="day-column" aria-label={`${dayName} ${formattedDate}`}>
       <header className="day-column-header">
-        <h3 className="day-column-title">
+        <h3 id={headingId} className="day-column-title">
           {dayName}
           <span className="day-column-date">{formattedDate}</span>
         </h3>
       </header>
 
-      <article className="day-column-content" role="region">
+      <article
+        id={regionId}
+        className="day-column-content"
+        role="region"
+        aria-labelledby={headingId}
+      >
         {children || (
           <div className="empty-state">
             <p className="empty-state-text">No tasks for {dayName}</p>

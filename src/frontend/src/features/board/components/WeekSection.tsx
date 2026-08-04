@@ -19,6 +19,7 @@ export function WeekSection({
   children,
 }: WeekSectionProps) {
   const weekDisplay = formatWeekRange(weekStart, weekEnd);
+  const headingId = "week-section-title";
 
   return (
     <section
@@ -26,11 +27,17 @@ export function WeekSection({
       aria-label={`Week tasks - ${weekDisplay}`}
     >
       <header className="week-section-header">
-        <h2 className="week-section-title">Week Tasks</h2>
+        <h2 id={headingId} className="week-section-title">
+          Week Tasks
+        </h2>
         <span className="week-section-date">{weekDisplay}</span>
       </header>
 
-      <article className="week-section-content" role="region">
+      <article
+        className="week-section-content"
+        role="region"
+        aria-labelledby={headingId}
+      >
         {children || (
           <div className="empty-state">
             <p className="empty-state-text">No week tasks</p>
