@@ -94,3 +94,16 @@ export function formatMonthDay(date: Date): string {
   });
   return formatter.format(date);
 }
+
+/**
+ * Shift a date by a fixed number of days.
+ * Useful for deterministic week navigation (+/-7 days).
+ * @param date Base date
+ * @param days Number of days to shift (negative for previous)
+ * @returns Shifted date
+ */
+export function shiftDateByDays(date: Date, days: number): Date {
+  const shiftedDate = new Date(date);
+  shiftedDate.setDate(shiftedDate.getDate() + days);
+  return shiftedDate;
+}

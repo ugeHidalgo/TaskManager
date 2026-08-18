@@ -5,5 +5,6 @@ export {
   getDayName,
   formatDate,
   formatMonthDay,
+  shiftDateByDays,
   type WeekRange,
 } from "./useWeekCalculation";

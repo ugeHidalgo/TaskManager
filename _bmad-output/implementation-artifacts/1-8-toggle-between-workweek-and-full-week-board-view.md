@@ -1,6 +1,6 @@
 # Story 1.8: Toggle Between Workweek and Full-Week Board View
 
-Status: ready-for-dev
+Status: backlog
 
 Epic: 1 - Secure Weekly Workspace
 Story ID: 1.8

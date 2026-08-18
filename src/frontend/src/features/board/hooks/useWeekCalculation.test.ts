@@ -5,6 +5,7 @@ import {
   formatWeekDisplay,
   getDayName,
   getWeekRange,
+  shiftDateByDays,
   useWeekCalculation,
 } from "./useWeekCalculation";
 
@@ -62,5 +63,15 @@ describe("useWeekCalculation helpers", () => {
     expect(getDayName(weekStart)).toBe("Monday");
     expect(formatDate(weekStart)).toBe("Jul 27");
     expect(formatMonthDay(weekStart)).toBe("July 27");
+  });
+
+  it("shifts dates deterministically by 7 days", () => {
+    const nextWeek = shiftDateByDays(weekStart, 7);
+    const previousWeek = shiftDateByDays(weekStart, -7);
+
+    expect(nextWeek.getDate()).toBe(3);
+    expect(nextWeek.getMonth()).toBe(7);
+    expect(previousWeek.getDate()).toBe(20);
+    expect(previousWeek.getMonth()).toBe(6);
   });
 });

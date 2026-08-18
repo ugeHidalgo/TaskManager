@@ -41,13 +41,37 @@ public sealed class TaskManagerFacade
 
     public IResult GetBoard(HttpContext httpContext)
     {
+        var requestedWeekStartDate = ResolveWeekStartDate(httpContext);
+
         var payload = new
         {
-            weekStartDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            weekStartDate = requestedWeekStartDate,
             lanes = Array.Empty<object>(),
         };
 
         return Results.Ok(ApiSuccessResponse<object>.Create(payload, httpContext.TraceIdentifier));
+    }
+
+    private static DateOnly ResolveWeekStartDate(HttpContext httpContext)
+    {
+        var queryValue = httpContext.Request.Query["week_start_date"].ToString();
+
+        if (DateOnly.TryParse(queryValue, out var parsedDate))
+        {
+            return ToMonday(parsedDate);
+        }
+
+        return ToMonday(DateOnly.FromDateTime(DateTime.UtcNow));
+    }
+
+    private static DateOnly ToMonday(DateOnly date)
+    {
+        while (date.DayOfWeek != DayOfWeek.Monday)
+        {
+            date = date.AddDays(-1);
+        }
+
+        return date;
     }
 
     public IResult GetCurrentUser(HttpContext httpContext)
