@@ -1,6 +1,6 @@
 # Story 1.4: Implement Frontend Login and Session Lifecycle
 
-Status: ready-for-dev
+Status: in-progress
 
 **Epic:** 1 - Secure Weekly Workspace  
 **Story ID:** 1.4  
@@ -34,7 +34,7 @@ so that I can authenticate once and access the board securely.
 
 - [ ] Create `frontend/src/features/auth/LoginForm.tsx` component
   - [ ] Form structure with username and password fields
-  - [ ] Add a checkbox to show or hide the password value
+  - [x] Add a checkbox to show or hide the password value
   - [ ] Client-side validation (required fields, basic format checks)
   - [ ] Form submission handler that calls backend login API
   - [ ] Loading and error state management during submission
@@ -481,7 +481,7 @@ GitHub Copilot (Claude Haiku 4.5)
 
 ## Status
 
-**Current Status:** ready-for-dev  
+**Current Status:** in-progress  
 **Estimated Duration:** 3-5 days  
 **Created:** 2026-07-15  
 **Ready for:** `dev-story` workflow execution

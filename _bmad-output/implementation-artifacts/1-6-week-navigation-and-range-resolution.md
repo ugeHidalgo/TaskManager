@@ -1,6 +1,6 @@
 # Story 1.6: Week Navigation and Range Resolution
 
-Status: review
+Status: done
 
 Epic: 1 - Secure Weekly Workspace
 Story ID: 1.6

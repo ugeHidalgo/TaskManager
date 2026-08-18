@@ -46,9 +46,9 @@ development_status:
   1-1-initialize-frontend-and-backend-starters: done
   1-2-provision-local-runtime-with-docker-compose-and-env-configuration: done
   1-3-implement-authentication-backend-baseline: done
-  1-4-implement-frontend-login-and-session-lifecycle: done
+  1-4-implement-frontend-login-and-session-lifecycle: in-progress
   1-5-week-layout-with-shared-week-section-above-daily-columns: done
-  1-6-week-navigation-and-range-resolution: review
+  1-6-week-navigation-and-range-resolution: done
   1-7-persistence-baseline-for-weekly-workspace: ready-for-dev
   1-8-toggle-between-workweek-and-full-week-board-view: backlog
   epic-1-retrospective: optional

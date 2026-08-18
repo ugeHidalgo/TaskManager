@@ -9,6 +9,7 @@ export function LoginPage() {
 
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("Admin123!");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -59,11 +60,39 @@ export function LoginPage() {
             autoComplete="username"
           />
 
-          <label htmlFor="password">Password</label>
+          <div className="password-label-row">
+            <label htmlFor="password">Password</label>
+            <label className="password-toggle" htmlFor="show-password">
+              <input
+                id="show-password"
+                name="show-password"
+                type="checkbox"
+                checked={showPassword}
+                onChange={(event) => setShowPassword(event.target.checked)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              />
+              <span
+                className="password-toggle-icon"
+                title={showPassword ? "Hide password" : "Show password"}
+                aria-hidden="true"
+              >
+                {showPassword ? (
+                  <svg viewBox="0 0 24 24" role="img">
+                    <path d="M1.5 12C2.7 8.7 6.8 5 12 5s9.3 3.7 10.5 7C21.3 15.3 17.2 19 12 19S2.7 15.3 1.5 12Z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" role="img">
+                    <path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.2A11.7 11.7 0 0 1 12 5c5.2 0 9.3 3.7 10.5 7a11.8 11.8 0 0 1-3.1 4.6M6.2 6.2A11.8 11.8 0 0 0 1.5 12c1.2 3.3 5.3 7 10.5 7 1 0 2-.1 2.9-.4" />
+                  </svg>
+                )}
+              </span>
+            </label>
+          </div>
           <input
             id="password"
             name="password"
-            type="password"
+            type={showPassword ? "text" : "password"}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             autoComplete="current-password"
