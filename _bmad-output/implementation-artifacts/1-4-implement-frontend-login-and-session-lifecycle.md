@@ -34,6 +34,7 @@ so that I can authenticate once and access the board securely.
 
 - [ ] Create `frontend/src/features/auth/LoginForm.tsx` component
   - [ ] Form structure with username and password fields
+  - [ ] Add a checkbox to show or hide the password value
   - [ ] Client-side validation (required fields, basic format checks)
   - [ ] Form submission handler that calls backend login API
   - [ ] Loading and error state management during submission
