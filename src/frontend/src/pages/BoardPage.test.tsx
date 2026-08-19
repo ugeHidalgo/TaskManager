@@ -56,7 +56,51 @@ function buildBoardResponseFromUrl(input: string): Response {
 
 describe("BoardPage week navigation", () => {
   afterEach(() => {
+    window.localStorage.clear();
     vi.restoreAllMocks();
+  });
+
+  it("switches between workweek and full-week columns and persists the mode", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      buildBoardResponseFromUrl(String(input)),
+    );
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getAllByText(/^No tasks for /i)).toHaveLength(5);
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "View" }),
+      "fullweek",
+    );
+
+    expect(screen.getAllByText(/^No tasks for /i)).toHaveLength(7);
+    expect(window.localStorage.getItem("taskmanager.boardViewMode")).toBe(
+      "fullweek",
+    );
+  });
+
+  it("restores the persisted board view mode", () => {
+    window.localStorage.setItem("taskmanager.boardViewMode", "fullweek");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      buildBoardResponseFromUrl(String(input)),
+    );
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("combobox", { name: "View" })).toHaveValue(
+      "fullweek",
+    );
+    expect(screen.getAllByText(/^No tasks for /i)).toHaveLength(7);
   });
 
   it("updates week range and requests the selected week_start_date", async () => {
@@ -81,7 +125,7 @@ describe("BoardPage week navigation", () => {
     const title = screen.getByRole("heading", { level: 1 });
     const initialTitle = title.textContent;
 
-    expect(initialTitle).toContain("Board - Week of");
+    expect(initialTitle).toMatch(/\w{3} \d+ - \w{3} \d+/);
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(

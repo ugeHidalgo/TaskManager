@@ -25,8 +25,31 @@ describe("WeekLayout", () => {
     expect(screen.getByText("No week tasks")).toBeInTheDocument();
   });
 
-  it("renders seven day columns", () => {
+  it("renders five workweek day columns by default", () => {
     render(<WeekLayout weekStart={weekStart} weekEnd={weekEnd} />);
+
+    for (const dayName of dayNames.slice(0, 5)) {
+      expect(
+        screen.getByRole("heading", {
+          name: new RegExp(dayName, "i"),
+          level: 3,
+        }),
+      ).toBeInTheDocument();
+    }
+
+    expect(screen.getAllByText(/^No tasks for /i)).toHaveLength(5);
+    expect(screen.queryByRole("heading", { name: /Saturday/i })).toBeNull();
+    expect(screen.queryByRole("heading", { name: /Sunday/i })).toBeNull();
+  });
+
+  it("renders all seven day columns in full-week mode", () => {
+    render(
+      <WeekLayout
+        weekStart={weekStart}
+        weekEnd={weekEnd}
+        viewMode="fullweek"
+      />,
+    );
 
     for (const dayName of dayNames) {
       expect(

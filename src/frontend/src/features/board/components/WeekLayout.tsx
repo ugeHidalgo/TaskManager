@@ -11,7 +11,11 @@ export interface WeekLayoutProps {
   weekContent?: ReactNode;
   /** Tasks per day, indexed by day number (0=Monday, 6=Sunday) */
   dayContent?: ReactNode[];
+  /** Number of day columns to display */
+  viewMode?: BoardViewMode;
 }
+
+export type BoardViewMode = "workweek" | "fullweek";
 
 /**
  * WeekLayout component displays a full week board with:
@@ -27,6 +31,7 @@ export function WeekLayout({
   weekEnd,
   weekContent,
   dayContent,
+  viewMode = "workweek",
 }: WeekLayoutProps) {
   const dayDates = getDayDatesInWeek(weekStart);
   const dayNames = [
@@ -39,8 +44,10 @@ export function WeekLayout({
     "Sunday",
   ];
 
+  const visibleDayCount = viewMode === "fullweek" ? 7 : 5;
+
   return (
-    <div className="week-layout">
+    <div className={`week-layout ${viewMode}`}>
       {/* Week section - full width */}
       <WeekSection weekStart={weekStart} weekEnd={weekEnd}>
         {weekContent}
@@ -48,7 +55,7 @@ export function WeekLayout({
 
       {/* Daily columns - 7 equal columns */}
       <div className="daily-columns">
-        {dayDates.map((date, index) => (
+        {dayDates.slice(0, visibleDayCount).map((date, index) => (
           <DayColumn key={`day-${index}`} date={date} dayName={dayNames[index]}>
             {dayContent?.[index]}
           </DayColumn>

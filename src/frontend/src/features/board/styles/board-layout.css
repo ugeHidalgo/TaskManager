@@ -53,8 +53,12 @@
 /* Daily Columns Grid */
 .daily-columns {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 1rem;
+}
+
+.week-layout.fullweek .daily-columns {
+  grid-template-columns: repeat(7, 1fr);
 }
 
 .day-column {
@@ -130,6 +134,10 @@
 
   .day-column-content {
     min-height: 5rem;
+  }
+
+  .week-layout.fullweek .daily-columns {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 

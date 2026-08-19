@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { formatDateOnly, getBoardForWeek } from "../api/board";
 import { useAuth } from "../auth/useAuth";
-import { WeekLayout } from "../features/board/components";
+import { WeekLayout, type BoardViewMode } from "../features/board/components";
 import {
   useWeekCalculation,
   formatWeekDisplay,
@@ -10,11 +10,21 @@ import {
 } from "../features/board/hooks/useWeekCalculation";
 import { getToken } from "../lib/session";
 
+const BOARD_VIEW_MODE_KEY = "taskmanager.boardViewMode";
+
+function getInitialBoardViewMode(): BoardViewMode {
+  const storedMode = window.localStorage.getItem(BOARD_VIEW_MODE_KEY);
+  return storedMode === "fullweek" ? "fullweek" : "workweek";
+}
+
 export function BoardPage() {
   const navigate = useNavigate();
   const { username, logout } = useAuth();
   const token = getToken();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [viewMode, setViewMode] = useState<BoardViewMode>(
+    getInitialBoardViewMode,
+  );
   const { weekStart, weekEnd } = useWeekCalculation(selectedDate);
   const weekStartDateParam = formatDateOnly(weekStart);
   const weekDisplay = formatWeekDisplay(weekStart, weekEnd);
@@ -35,7 +45,7 @@ export function BoardPage() {
           return;
         }
         // Board data loaded successfully
-      } catch (error: unknown) {
+      } catch {
         if (!isCurrentRequest) {
           return;
         }
@@ -63,6 +73,11 @@ export function BoardPage() {
   function handleCurrentWeek() {
     // Return to the actual current week.
     setSelectedDate(new Date());
+  }
+
+  function handleViewModeChange(mode: BoardViewMode) {
+    setViewMode(mode);
+    window.localStorage.setItem(BOARD_VIEW_MODE_KEY, mode);
   }
 
   function handleLogout() {
@@ -111,6 +126,17 @@ export function BoardPage() {
           </div>
         </div>
         <div className="topbar-actions">
+          <label htmlFor="board-view-mode">View</label>
+          <select
+            id="board-view-mode"
+            value={viewMode}
+            onChange={(event) =>
+              handleViewModeChange(event.target.value as BoardViewMode)
+            }
+          >
+            <option value="workweek">Workweek (Mon-Fri)</option>
+            <option value="fullweek">Full week (Mon-Sun)</option>
+          </select>
           <span className="muted">Signed in as {username ?? "unknown"}</span>
           <button type="button" onClick={handleLogout}>
             Logout
@@ -118,7 +144,7 @@ export function BoardPage() {
         </div>
       </header>
 
-      <WeekLayout weekStart={weekStart} weekEnd={weekEnd} />
+      <WeekLayout weekStart={weekStart} weekEnd={weekEnd} viewMode={viewMode} />
     </main>
   );
 }

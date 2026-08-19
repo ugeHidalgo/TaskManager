@@ -1,6 +1,6 @@
 # Story 1.8: Toggle Between Workweek and Full-Week Board View
 
-Status: backlog
+Status: done
 
 Epic: 1 - Secure Weekly Workspace
 Story ID: 1.8
@@ -42,41 +42,41 @@ And default mode is Workweek.
 
 ### Task 1 - Header selector
 
-- [ ] Add board mode selector in `src/frontend/src/pages/BoardPage.tsx`
+- [x] Add board mode selector in `src/frontend/src/pages/BoardPage.tsx`
 - [ ] Options:
-  - [ ] `workweek`
-  - [ ] `fullweek`
-- [ ] Ensure keyboard accessible native control (`select` or segmented buttons with roles)
+  - [x] `workweek`
+  - [x] `fullweek`
+- [x] Ensure keyboard accessible native control (`select` or segmented buttons with roles)
 
 ### Task 2 - Layout conditional rendering
 
-- [ ] Extend `WeekLayout` props to accept mode
-- [ ] Render day list by mode:
-  - [ ] Workweek: Monday-Friday
-  - [ ] Fullweek: Monday-Sunday
-- [ ] Keep week section behavior unchanged
+- [x] Extend `WeekLayout` props to accept mode
+- [x] Render day list by mode:
+  - [x] Workweek: Monday-Friday
+  - [x] Fullweek: Monday-Sunday
+- [x] Keep week section behavior unchanged
 
 ### Task 3 - Persistence and state
 
-- [ ] Store selected mode in localStorage
-  - [ ] Key: `taskmanager.boardViewMode`
-  - [ ] Allowed values: `workweek`, `fullweek`
-- [ ] Restore mode on board load
-- [ ] Fallback default mode (`workweek`) if value missing/invalid
+- [x] Store selected mode in localStorage
+  - [x] Key: `taskmanager.boardViewMode`
+  - [x] Allowed values: `workweek`, `fullweek`
+- [x] Restore mode on board load
+- [x] Fallback default mode (`workweek`) if value missing/invalid
 
 ### Task 4 - Tests
 
-- [ ] Add/extend component tests for mode-specific column counts
-- [ ] Add test for selector-driven rerender behavior
-- [ ] Add test for localStorage restore behavior
-- [ ] Add no-regression test ensuring Week section and empty states remain stable across both modes
-- [ ] Keep existing week/date tests passing
+- [x] Add/extend component tests for mode-specific column counts
+- [x] Add test for selector-driven rerender behavior
+- [x] Add test for localStorage restore behavior
+- [x] Add no-regression test ensuring Week section and empty states remain stable across both modes
+- [x] Keep existing week/date tests passing
 
 ### Task 5 - Validation
 
-- [ ] Run frontend tests (`npm run test:run --prefix src/frontend`)
-- [ ] Run lint (`npm run lint --prefix src/frontend`)
-- [ ] Run build (`npm run build --prefix src/frontend`)
+- [x] Run frontend tests (`npm run test:run --prefix src/frontend`)
+- [x] Run lint (`npm run lint --prefix src/frontend`)
+- [x] Run build (`npm run build --prefix src/frontend`)
 
 ---
 
