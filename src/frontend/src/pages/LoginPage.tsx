@@ -1,11 +1,30 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/useAuth";
+
+interface LoginLocationState {
+  from?: {
+    pathname?: string;
+  };
+}
+
+function resolvePostLoginPath(state: LoginLocationState | null): string {
+  const path = state?.from?.pathname;
+  if (!path || path === "/login") {
+    return "/board";
+  }
+
+  return path;
+}
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated, login } = useAuth();
+  const postLoginPath = resolvePostLoginPath(
+    (location.state as LoginLocationState | null) ?? null,
+  );
 
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("Admin123!");
@@ -15,9 +34,9 @@ export function LoginPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate("/board", { replace: true });
+      navigate(postLoginPath, { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, postLoginPath]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -31,7 +50,7 @@ export function LoginPage() {
     try {
       setIsSubmitting(true);
       await login(username, password);
-      navigate("/board", { replace: true });
+      navigate(postLoginPath, { replace: true });
     } catch (submitError) {
       setError(
         submitError instanceof Error

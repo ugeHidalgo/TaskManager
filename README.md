@@ -116,4 +116,12 @@ What it validates:
 - login success returns JWT
 - invalid login fails safely
 - token can be reused against protected endpoint
-- logout behavior is implemented in frontend (token cleared from localStorage)
+- auth session restore endpoint returns current user with valid bearer token
+- logout behavior is implemented in frontend (token cleared from sessionStorage)
+
+Manual frontend auth checks:
+
+- Open `/login` and authenticate with valid credentials.
+- Verify redirect to `/board` and protected routes require session.
+- Reload the browser and verify session is restored without re-login.
+- Logout and verify protected routes redirect back to `/login`.

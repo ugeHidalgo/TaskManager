@@ -1,6 +1,6 @@
 # Story 1.4: Implement Frontend Login and Session Lifecycle
 
-Status: in-progress
+Status: done
 
 **Epic:** 1 - Secure Weekly Workspace  
 **Story ID:** 1.4  
@@ -481,7 +481,7 @@ GitHub Copilot (Claude Haiku 4.5)
 
 ## Status
 
-**Current Status:** in-progress  
+**Current Status:** done  
 **Estimated Duration:** 3-5 days  
 **Created:** 2026-07-15  
 **Ready for:** `dev-story` workflow execution

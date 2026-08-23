@@ -1,6 +1,6 @@
 # Story 1.7: Persistence Baseline for Weekly Workspace
 
-Status: review
+Status: done
 
 Epic: 1 - Secure Weekly Workspace
 Story ID: 1.7

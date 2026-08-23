@@ -152,6 +152,9 @@ app.MapGet("/health", (TaskManagerFacade facade) => facade.GetHealth());
 app.MapPost("/api/v1/auth/login", (LoginRequest request, IAuthService authService, HttpContext httpContext, CancellationToken cancellationToken, TaskManagerFacade facade) =>
     facade.LoginAsync(request, authService, httpContext, cancellationToken));
 
+app.MapGet("/api/v1/auth/me", [Authorize] (HttpContext httpContext, TaskManagerFacade facade) =>
+    facade.GetCurrentUser(httpContext));
+
 app.MapGet("/api/v1/board", [Authorize] (
     HttpContext httpContext,
     TaskManagerFacade facade,
