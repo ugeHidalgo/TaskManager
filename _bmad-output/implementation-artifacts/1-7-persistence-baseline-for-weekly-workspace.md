@@ -1,6 +1,6 @@
 # Story 1.7: Persistence Baseline for Weekly Workspace
 
-Status: ready-for-dev
+Status: review
 
 Epic: 1 - Secure Weekly Workspace
 Story ID: 1.7
@@ -27,29 +27,29 @@ so that my workspace is stable across sessions.
 
 ### Task 1 - Persistence model baseline
 
-- [ ] Define week/day workspace persistence schema and repository access.
-- [ ] Add migration(s) for baseline weekly workspace entities.
+- [x] Define week/day workspace persistence schema and repository access.
+- [x] Add migration(s) for baseline weekly workspace entities.
 
 ### Task 2 - Backend query and response
 
-- [ ] Implement week-scoped load endpoint using Monday-based week_start_date.
-- [ ] Return deterministic empty workspace payload when records do not yet exist.
+- [x] Implement week-scoped load endpoint using Monday-based week_start_date.
+- [x] Return deterministic empty workspace payload when records do not yet exist.
 
 ### Task 3 - Frontend integration
 
-- [ ] Integrate board loading flow with week navigation context.
-- [ ] Render persisted/empty workspace response with current board structure.
+- [x] Integrate board loading flow with week navigation context.
+- [x] Render persisted/empty workspace response with current board structure.
 
 ### Task 4 - Validation
 
-- [ ] Add backend tests for week-scoped retrieval and empty initialization behavior.
-- [ ] Add smoke validation for persisted week reload behavior.
+- [x] Add backend tests for week-scoped retrieval and empty initialization behavior.
+- [x] Add smoke validation for persisted week reload behavior.
 
 ---
 
 ## Definition of Done
 
-- [ ] Week workspace data is persisted and retrieved per week_start_date.
-- [ ] Empty week initialization behavior is deterministic.
-- [ ] Frontend board reads backend week context successfully.
-- [ ] Tests and local quality checks pass.
+- [x] Week workspace data is persisted and retrieved per week_start_date.
+- [x] Empty week initialization behavior is deterministic.
+- [x] Frontend board reads backend week context successfully.
+- [x] Tests and local quality checks pass.

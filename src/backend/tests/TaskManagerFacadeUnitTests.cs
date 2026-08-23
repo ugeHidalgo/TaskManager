@@ -1,8 +1,12 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using TaskManager.Api.Facades;
+using TaskManager.Api.Contracts;
 using TaskManager.Application.Auth;
+using TaskManager.Domain.Board;
+using TaskManager.Infrastructure.Persistence;
 using Xunit;
 
 namespace TaskManager.Facaded.Tests;
@@ -69,16 +73,59 @@ public sealed class TaskManagerFacadeUnitTests
     }
 
     [Fact]
-    public void GetBoard_ReturnsBoardEnvelope()
+    public async Task GetBoardAsync_CreatesDeterministicEmptyWorkspace_WhenMissing()
     {
         var context = CreateContext();
+        context.Request.QueryString = new QueryString("?week_start_date=2026-08-19");
+        await using var dbContext = CreateDbContext();
 
-        var result = _facade.GetBoard(context);
+        var result = await _facade.GetBoardAsync(context, dbContext, CancellationToken.None);
         var response = ToResponse(result);
 
         Assert.Equal(StatusCodes.Status200OK, response.StatusCode);
-        Assert.True(response.Body.RootElement.GetProperty("Data").TryGetProperty("weekStartDate", out _));
-        Assert.True(response.Body.RootElement.GetProperty("Data").TryGetProperty("lanes", out _));
+        Assert.Equal("2026-08-17", response.Body.RootElement.GetProperty("Data").GetProperty("weekStartDate").GetString());
+        Assert.Equal(JsonValueKind.Array, response.Body.RootElement.GetProperty("Data").GetProperty("lanes").ValueKind);
+        Assert.Empty(response.Body.RootElement.GetProperty("Data").GetProperty("lanes").EnumerateArray());
+
+        var storedWorkspace = await dbContext.WeekWorkspaces.SingleAsync();
+        Assert.Equal(new DateOnly(2026, 8, 17), storedWorkspace.WeekStartDate);
+    }
+
+    [Fact]
+    public async Task SaveBoardAsync_PersistsWorkspace_AndSubsequentLoadReturnsStoredLanes()
+    {
+        var context = CreateContext();
+        await using var dbContext = CreateDbContext();
+        var lanes = JsonDocument.Parse("[{\"id\":\"lane-1\",\"title\":\"Monday\"}]").RootElement;
+        var request = new SaveBoardRequest(new DateOnly(2026, 8, 19), lanes);
+
+        var saveResult = await _facade.SaveBoardAsync(context, request, dbContext, CancellationToken.None);
+        var saveResponse = ToResponse(saveResult);
+
+        Assert.Equal(StatusCodes.Status200OK, saveResponse.StatusCode);
+        Assert.Equal("2026-08-17", saveResponse.Body.RootElement.GetProperty("Data").GetProperty("weekStartDate").GetString());
+
+        context.Request.QueryString = new QueryString("?week_start_date=2026-08-21");
+        var loadResult = await _facade.GetBoardAsync(context, dbContext, CancellationToken.None);
+        var loadResponse = ToResponse(loadResult);
+
+        Assert.Equal(StatusCodes.Status200OK, loadResponse.StatusCode);
+        Assert.Single(loadResponse.Body.RootElement.GetProperty("Data").GetProperty("lanes").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task SaveBoardAsync_ReturnsBadRequest_WhenLanesIsNotArray()
+    {
+        var context = CreateContext();
+        await using var dbContext = CreateDbContext();
+        var lanes = JsonDocument.Parse("{\"id\":\"lane-1\"}").RootElement;
+        var request = new SaveBoardRequest(new DateOnly(2026, 8, 18), lanes);
+
+        var result = await _facade.SaveBoardAsync(context, request, dbContext, CancellationToken.None);
+        var response = ToResponse(result);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
+        Assert.Equal("board.validation", response.Body.RootElement.GetProperty("Error").GetProperty("Code").GetString());
     }
 
     [Fact]
@@ -103,6 +150,15 @@ public sealed class TaskManagerFacadeUnitTests
         {
             TraceIdentifier = "test-request-id"
         };
+    }
+
+    private static TaskManagerDbContext CreateDbContext()
+    {
+        var options = new DbContextOptionsBuilder<TaskManagerDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+
+        return new TaskManagerDbContext(options);
     }
 
     private static (int StatusCode, JsonDocument Body) ToResponse(IResult result)

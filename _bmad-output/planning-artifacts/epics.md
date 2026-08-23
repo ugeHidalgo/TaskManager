@@ -489,7 +489,7 @@ So that I do not accidentally discard in-progress changes.
 
 ## Epic 3: Task Prioritization by Drag and Reorder
 
-Allow users to prioritize work fluidly by reordering tasks within and across day and shared-week lanes with persisted order behavior.
+Allow users to prioritize work fluidly by reordering tasks within and across day and shared-week lanes with persisted order behavior, including moves across different week contexts (current, next, or future weeks).
 
 ### Story 3.1: Reorder Tasks Within the Same Section
 
@@ -546,6 +546,89 @@ So that I can reassign work to the right day or keep it flexible for the week.
 **When** board recalculates
 **Then** source and destination lists reflect correct order and counts
 **And** no duplicate task entry is displayed
+
+**Given** a task in the current week
+**When** user moves it to a lane in a different week (for example next week Monday)
+**Then** task is removed from origin week and inserted in destination week lane
+**And** task identity is preserved without creating duplicates
+
+**Given** a task in any week/day lane
+**When** user moves it to the shared week section of another future week (for example +3 weeks)
+**Then** task becomes week-scoped in the destination week
+**And** reassignment persists after reload in both weeks
+
+**Given** a task card is visible
+**When** user opens the context menu with right-click and chooses Move
+**Then** the task is marked as selected-for-move
+**And** the app enters pending-move mode without moving the task yet
+
+**Given** a task is selected-for-move
+**When** user navigates to another week and opens context menu on a destination lane (day or shared week)
+**Then** context menu shows Move here
+**And** selecting Move here moves the selected task to that destination lane
+
+**Given** destination lane is valid
+**When** move is confirmed from context menu
+**Then** task is removed from source lane and added to destination lane
+**And** move works for both day columns and shared week section
+
+**Given** move mode is active
+**When** user cancels action or clicks outside move flow
+**Then** pending-move state is cleared
+**And** no data mutation is persisted
+
+**Proposed API Contract (Draft):**
+
+Endpoint:
+
+- `POST /api/v1/tasks/{taskId}/move`
+
+Request body (conceptual):
+
+```json
+{
+  "from": {
+    "weekStartDate": "2026-08-17",
+    "laneId": "wed",
+    "index": 2
+  },
+  "to": {
+    "weekStartDate": "2026-08-24",
+    "laneId": "mon",
+    "index": 0
+  },
+  "clientOperationId": "c0d8f3f2-2d58-4b83-aab5-91e3f2f7f0a8"
+}
+```
+
+Behavior rules:
+
+- Move inside same week: reorder and lane reassignment in one operation.
+- Move across weeks: remove from origin week and insert in destination week atomically.
+- `taskId` identity must be preserved; moving never creates a duplicate task.
+- Destination `laneId` may be a day lane (`mon`..`sun`) or shared week lane (`week`).
+- Server normalizes all week dates to Monday-based `week_start_date`.
+- If source snapshot changed since client read, return conflict for client resync.
+- UI flow: move is two-step via context menu (`Move` on task, then `Move here` on destination lane).
+
+Success response:
+
+- Standard success envelope with updated source and destination week snapshots.
+
+Error response:
+
+- Standard error envelope with validation/conflict codes.
+
+Proposed error codes:
+
+- `task.move.not_found` (`404`): `taskId` does not exist in origin context.
+- `task.move.invalid_lane` (`400`): source or destination `laneId` is invalid.
+- `task.move.invalid_index` (`400`): source or destination `index` is out of bounds.
+- `task.move.invalid_week` (`400`): week date format is invalid or cannot be normalized.
+- `task.move.conflict` (`409`): source ordering/version changed since client read.
+- `task.move.duplicate_identity` (`409`): operation would create duplicate `taskId` in destination snapshot.
+- `task.move.forbidden` (`403`): user is not authorized to move the requested task.
+- `task.move.unexpected` (`500`): unexpected server failure during move transaction.
 
 ### Story 3.3: Maintain Stable Order Semantics and Visual Feedback
 
