@@ -10,6 +10,8 @@ public sealed class TaskManagerDbContext(DbContextOptions<TaskManagerDbContext> 
 
     public DbSet<WeekWorkspace> WeekWorkspaces => Set<WeekWorkspace>();
 
+    public DbSet<TaskItem> Tasks => Set<TaskItem>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(TaskManagerDbContext).Assembly);

@@ -41,11 +41,11 @@ so that I can organize planned work with the right temporal scope.
 
 ### Task 1 - Define task domain and persistence model
 
-- [ ] Introduce a task representation that has a stable identifier, week ownership, required title, optional notes, status, creation/update timestamps, and placement information.
-- [ ] Represent shared-week placement distinctly from a day placement; use the existing deterministic Monday-based week key and ISO date conventions.
-- [ ] Add database mapping and migration(s) using existing PostgreSQL/EF Core conventions.
-- [ ] Preserve existing week workspace data while migrating away from or interoperating with the current generic `lanes` JSON baseline; do not create two competing sources of truth.
-- [ ] Enforce server-side title validation and data constraints. A title containing only whitespace is invalid.
+- [x] Introduce a task representation that has a stable identifier, week ownership, required title, optional notes, status, creation/update timestamps, and placement information.
+- [x] Represent shared-week placement distinctly from a day placement; use the existing deterministic Monday-based week key and ISO date conventions.
+- [x] Add database mapping and migration(s) using existing PostgreSQL/EF Core conventions.
+- [x] Preserve existing week workspace data while migrating away from or interoperating with the current generic `lanes` JSON baseline; do not create two competing sources of truth.
+- [x] Enforce server-side title validation and data constraints. A title containing only whitespace is invalid.
 
 ### Task 2 - Add authenticated API contract
 
@@ -150,4 +150,16 @@ so that I can organize planned work with the right temporal scope.
 
 ### Completion Notes List
 
+- Implemented `TaskItem` with weekly ownership, nullable day placement for shared-week tasks, title/notes normalization, supported status validation, and UTC timestamps.
+- Added EF Core mapping and generated `TaskPersistence` migration for the `tasks` table with a foreign key to `week_workspaces`.
+- Added six focused domain tests; all pass.
+
 ### File List
+
+- `src/backend/src/TaskManager.Domain/Board/TaskItem.cs`
+- `src/backend/src/TaskManager.Infrastructure/Persistence/Configurations/TaskItemConfiguration.cs`
+- `src/backend/src/TaskManager.Infrastructure/Persistence/TaskManagerDbContext.cs`
+- `src/backend/src/TaskManager.Infrastructure/Persistence/Migrations/20260823180849_TaskPersistence.cs`
+- `src/backend/src/TaskManager.Infrastructure/Persistence/Migrations/20260823180849_TaskPersistence.Designer.cs`
+- `src/backend/src/TaskManager.Infrastructure/Persistence/Migrations/TaskManagerDbContextModelSnapshot.cs`
+- `src/backend/tests/TaskItemTests.cs`
