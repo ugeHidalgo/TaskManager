@@ -107,9 +107,142 @@ public sealed class TaskManagerFacade
         return Results.Ok(ApiSuccessResponse<object>.Create(payload, httpContext.TraceIdentifier));
     }
 
-    private static DateOnly ResolveWeekStartDate(HttpContext httpContext)
+    public async Task<IResult> GetTasksAsync(
+        HttpContext httpContext,
+        TaskManagerDbContext dbContext,
+        CancellationToken cancellationToken)
     {
-        var queryValue = httpContext.Request.Query["week_start_date"].ToString();
+        var weekStartDate = ResolveWeekStartDate(httpContext, "weekStartDate");
+        var workspace = await dbContext.WeekWorkspaces
+            .SingleOrDefaultAsync(candidate => candidate.WeekStartDate == weekStartDate, cancellationToken);
+
+        var tasks = workspace is null
+            ? []
+            : await dbContext.Tasks
+                .Where(task => task.WeekWorkspaceId == workspace.Id)
+                .OrderBy(task => task.CreatedAtUtc)
+                .Select(task => ToTaskResponse(task))
+                .ToListAsync(cancellationToken);
+
+        return Results.Ok(ApiSuccessResponse<IReadOnlyList<TaskResponse>>.Create(
+            tasks,
+            httpContext.TraceIdentifier));
+    }
+
+    public async Task<IResult> CreateTaskAsync(
+        HttpContext httpContext,
+        CreateTaskRequest request,
+        TaskManagerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var weekStartDate = ToMonday(request.WeekStartDate);
+            var workspace = await GetOrCreateWorkspaceAsync(dbContext, weekStartDate, cancellationToken);
+            var task = TaskItem.Create(
+                workspace.Id,
+                weekStartDate,
+                request.Title,
+                request.DayDate,
+                request.Notes,
+                request.Status);
+
+            dbContext.Tasks.Add(task);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            return Results.Created(
+                $"/api/v1/tasks/{task.Id}",
+                ApiSuccessResponse<TaskResponse>.Create(ToTaskResponse(task), httpContext.TraceIdentifier));
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(ApiErrorResponse.Create(
+                code: "task.validation",
+                message: exception.Message,
+                requestId: httpContext.TraceIdentifier));
+        }
+    }
+
+    public async Task<IResult> UpdateTaskAsync(
+        Guid taskId,
+        HttpContext httpContext,
+        UpdateTaskRequest request,
+        TaskManagerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var weekStartDate = ToMonday(request.WeekStartDate);
+        var workspace = await dbContext.WeekWorkspaces
+            .SingleOrDefaultAsync(candidate => candidate.WeekStartDate == weekStartDate, cancellationToken);
+        var task = workspace is null
+            ? null
+            : await dbContext.Tasks.SingleOrDefaultAsync(
+                candidate => candidate.Id == taskId && candidate.WeekWorkspaceId == workspace.Id,
+                cancellationToken);
+
+        if (task is null)
+        {
+            return Results.NotFound(ApiErrorResponse.Create(
+                code: "task.not_found",
+                message: "Task was not found in the selected week.",
+                requestId: httpContext.TraceIdentifier));
+        }
+
+        try
+        {
+            task.Update(
+                weekStartDate,
+                request.Title,
+                request.DayDate,
+                request.Notes,
+                request.Status);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            return Results.Ok(ApiSuccessResponse<TaskResponse>.Create(
+                ToTaskResponse(task),
+                httpContext.TraceIdentifier));
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(ApiErrorResponse.Create(
+                code: "task.validation",
+                message: exception.Message,
+                requestId: httpContext.TraceIdentifier));
+        }
+    }
+
+    private static async Task<WeekWorkspace> GetOrCreateWorkspaceAsync(
+        TaskManagerDbContext dbContext,
+        DateOnly weekStartDate,
+        CancellationToken cancellationToken)
+    {
+        var workspace = await dbContext.WeekWorkspaces
+            .SingleOrDefaultAsync(candidate => candidate.WeekStartDate == weekStartDate, cancellationToken);
+        if (workspace is not null)
+        {
+            return workspace;
+        }
+
+        workspace = WeekWorkspace.Create(weekStartDate);
+        dbContext.WeekWorkspaces.Add(workspace);
+        return workspace;
+    }
+
+    private static TaskResponse ToTaskResponse(TaskItem task)
+    {
+        return new TaskResponse(
+            task.Id,
+            task.WeekWorkspaceId,
+            task.DayDate,
+            task.Title,
+            task.Notes,
+            task.Status,
+            task.CreatedAtUtc,
+            task.UpdatedAtUtc);
+    }
+
+    private static DateOnly ResolveWeekStartDate(HttpContext httpContext, string queryParameter = "week_start_date")
+    {
+        var queryValue = httpContext.Request.Query[queryParameter].ToString();
 
         if (DateOnly.TryParse(queryValue, out var parsedDate))
         {

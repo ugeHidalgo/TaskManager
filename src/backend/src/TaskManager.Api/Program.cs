@@ -170,4 +170,28 @@ app.MapPut("/api/v1/board", [Authorize] (
     CancellationToken cancellationToken) =>
     facade.SaveBoardAsync(httpContext, request, dbContext, cancellationToken));
 
+app.MapGet("/api/v1/tasks", [Authorize] (
+    HttpContext httpContext,
+    TaskManagerFacade facade,
+    TaskManagerDbContext dbContext,
+    CancellationToken cancellationToken) =>
+    facade.GetTasksAsync(httpContext, dbContext, cancellationToken));
+
+app.MapPost("/api/v1/tasks", [Authorize] (
+    CreateTaskRequest request,
+    HttpContext httpContext,
+    TaskManagerFacade facade,
+    TaskManagerDbContext dbContext,
+    CancellationToken cancellationToken) =>
+    facade.CreateTaskAsync(httpContext, request, dbContext, cancellationToken));
+
+app.MapPut("/api/v1/tasks/{taskId:guid}", [Authorize] (
+    Guid taskId,
+    UpdateTaskRequest request,
+    HttpContext httpContext,
+    TaskManagerFacade facade,
+    TaskManagerDbContext dbContext,
+    CancellationToken cancellationToken) =>
+    facade.UpdateTaskAsync(taskId, httpContext, request, dbContext, cancellationToken));
+
 app.Run();

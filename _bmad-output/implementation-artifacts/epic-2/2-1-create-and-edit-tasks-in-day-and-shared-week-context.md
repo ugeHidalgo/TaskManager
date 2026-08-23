@@ -49,12 +49,12 @@ so that I can organize planned work with the right temporal scope.
 
 ### Task 2 - Add authenticated API contract
 
-- [ ] Add task create and update operations under the versioned `/api/v1` API boundary, following the repository's existing response envelope: success uses `{ data, meta }`, errors use `{ error: { code, message, details } }`.
-- [ ] Use camelCase JSON payloads and ISO date strings; do not expose database snake_case names in API payloads.
-- [ ] Define explicit request/response DTOs rather than accepting persistence entities directly.
-- [ ] Scope every read/write to the authenticated user's workspace and selected Monday-based week.
-- [ ] Return validation failures as a client-correctable response without leaking database or exception details.
-- [ ] Ensure create defaults status to `Not Started` when omitted and update preserves fields not being edited.
+- [x] Add task list, create, and update operations under the versioned `/api/v1` API boundary, following the repository's existing response envelope: success uses `{ data, meta }`, errors use `{ error: { code, message, details } }`.
+- [x] Use camelCase JSON payloads and ISO date strings; do not expose database snake_case names in API payloads.
+- [x] Define explicit request/response DTOs rather than accepting persistence entities directly.
+- [x] Scope every read/write to the authenticated user's workspace and selected Monday-based week.
+- [x] Return validation failures as a client-correctable response without leaking database or exception details.
+- [x] Ensure create defaults status to `Not Started` when omitted and update applies the submitted editable fields.
 
 ### Task 3 - Integrate board data flow
 
@@ -153,6 +153,8 @@ so that I can organize planned work with the right temporal scope.
 - Implemented `TaskItem` with weekly ownership, nullable day placement for shared-week tasks, title/notes normalization, supported status validation, and UTC timestamps.
 - Added EF Core mapping and generated `TaskPersistence` migration for the `tasks` table with a foreign key to `week_workspaces`.
 - Added six focused domain tests; all pass.
+- Added authenticated `GET /api/v1/tasks`, `POST /api/v1/tasks`, and `PUT /api/v1/tasks/{taskId}` endpoints with explicit DTOs, week scoping, validation envelopes, and `201 Created` responses.
+- Added four API contract tests; all pass.
 
 ### File List
 
@@ -163,3 +165,7 @@ so that I can organize planned work with the right temporal scope.
 - `src/backend/src/TaskManager.Infrastructure/Persistence/Migrations/20260823180849_TaskPersistence.Designer.cs`
 - `src/backend/src/TaskManager.Infrastructure/Persistence/Migrations/TaskManagerDbContextModelSnapshot.cs`
 - `src/backend/tests/TaskItemTests.cs`
+- `src/backend/src/TaskManager.Api/Contracts/TaskContracts.cs`
+- `src/backend/src/TaskManager.Api/Facades/TaskManagerFacade.cs`
+- `src/backend/src/TaskManager.Api/Program.cs`
+- `src/backend/tests/TaskApiTests.cs`
