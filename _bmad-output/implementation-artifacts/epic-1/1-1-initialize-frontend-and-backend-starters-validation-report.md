@@ -1,7 +1,7 @@
 # Story Validation Report - 1-1-initialize-frontend-and-backend-starters
 
 Date: 2026-07-12
-Story File: \_bmad-output/implementation-artifacts/1-1-initialize-frontend-and-backend-starters.md
+Story File: \_bmad-output/implementation-artifacts/epic-1/1-1-initialize-frontend-and-backend-starters.md
 Validation Scope: Story readiness for dev-story
 
 ## Overall Decision

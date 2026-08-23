@@ -53,12 +53,12 @@ development_status:
   1-8-toggle-between-workweek-and-full-week-board-view: done
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-create-and-edit-tasks-in-day-and-shared-week-context: backlog
-  2-2-keep-completed-tasks-visible-and-reopenable: backlog
-  2-3-manage-recurring-tasks-and-daily-checks: backlog
-  2-4-compute-day-and-week-completion-status: backlog
-  2-5-protect-unsaved-changes-during-navigation: backlog
+  epic-2: in-progress
+  2-1-create-and-edit-tasks-in-day-and-shared-week-context: ready-for-dev
+  2-2-keep-completed-tasks-visible-and-reopenable: ready-for-dev
+  2-3-manage-recurring-tasks-and-daily-checks: ready-for-dev
+  2-4-compute-day-and-week-completion-status: ready-for-dev
+  2-5-protect-unsaved-changes-during-navigation: ready-for-dev
   epic-2-retrospective: optional
 
   epic-3: backlog

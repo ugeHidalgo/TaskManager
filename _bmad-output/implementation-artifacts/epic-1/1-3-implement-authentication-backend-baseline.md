@@ -68,4 +68,4 @@ GPT-5.3-Codex
 
 - src/backend/src/TaskManager.Api/Program.cs
 - scripts/smoke-auth.sh
-- \_bmad-output/implementation-artifacts/1-3-implement-authentication-backend-baseline.md
+- \_bmad-output/implementation-artifacts/epic-1/1-3-implement-authentication-backend-baseline.md

@@ -440,7 +440,7 @@ GitHub Copilot (Claude Haiku 4.5)
 - `frontend/src/app/providers/index.tsx` (UPDATE - add AuthProvider)
 - `scripts/smoke-auth.sh` (UPDATE - add frontend checks)
 - `README.md` (UPDATE - document login flow)
-- `_bmad-output/implementation-artifacts/1-4-implement-frontend-login-and-session-lifecycle.md` (UPDATE - add evidence)
+- `_bmad-output/implementation-artifacts/epic-1/1-4-implement-frontend-login-and-session-lifecycle.md` (UPDATE - add evidence)
 
 **Epic 1 Progress:**
 

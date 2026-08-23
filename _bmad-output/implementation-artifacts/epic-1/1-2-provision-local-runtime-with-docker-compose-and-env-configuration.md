@@ -64,5 +64,5 @@ GPT-5.3-Codex
 
 ### File List
 
-- \_bmad-output/implementation-artifacts/1-2-provision-local-runtime-with-docker-compose-and-env-configuration.md
+- \_bmad-output/implementation-artifacts/epic-1/1-2-provision-local-runtime-with-docker-compose-and-env-configuration.md
 - \_bmad-output/implementation-artifacts/sprint-status.yaml

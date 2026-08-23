@@ -134,8 +134,8 @@ GPT-5.3-Codex
   - Finding 1: reject placeholder/predictable JWT secrets at startup and require explicit secure secret configuration.
   - Finding 2: remove default bootstrap admin credentials and make bootstrap user creation explicit dev-only opt-in.
 - Story 1.1 remains in review until Story 1.4 implements these remediations.
-- Execution checklist for these remediations: \_bmad-output/implementation-artifacts/1-4-security-remediation-checklist.md.
+- Execution checklist for these remediations: \_bmad-output/implementation-artifacts/epic-1/1-4-security-remediation-checklist.md.
 
 ### File List
 
-- \_bmad-output/implementation-artifacts/1-1-initialize-frontend-and-backend-starters.md
+- \_bmad-output/implementation-artifacts/epic-1/1-1-initialize-frontend-and-backend-starters.md
