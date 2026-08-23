@@ -17,15 +17,17 @@ so that I can organize planned work with the right temporal scope.
 
 ## Acceptance Criteria
 
-1. Given the authenticated board is open, when the user creates a task from the shared week section or a day column, then the task is assigned to the selected week context and selected lane, and appears in that location without a full page reload.
+1. Given the authenticated board is open, when the user presses the `+` button in the shared week section header or a day-column header, then a task-creation popup opens with the task fields and the selected section/date as its default context.
 2. Given a task exists, when the user edits its title, notes, or context, then the changes are validated, persisted, and reflected in the board without a full page reload.
 3. Given a task is moved between the shared week context and a day context through the supported edit flow, when the save succeeds, then it is removed from the old location and appears in the new location for the same week.
 4. Given the user submits an empty or whitespace-only title, when validation runs, then an inline validation message is shown, the request is not sent, and the task is not created or changed.
-5. Given a create or edit request fails, when the API returns an error, then the draft remains available for correction, the board does not silently lose existing data, and an actionable non-sensitive error is shown.
-6. Given a create or edit request succeeds, when the operation completes, then the board state is refreshed or updated from the persisted response, and clear save feedback is exposed to the user.
-7. Given the user reloads the same week or logs out and back in, when the board is loaded, then created and edited tasks retain their title, notes, status, week context, and day/shared-week location.
-8. Given the board is rendered in workweek or full-week mode, when tasks are loaded, then shared-week tasks remain in the shared section and day tasks render in their matching date column; changing view mode must not duplicate or discard tasks.
-9. Given an unauthenticated request attempts to create or edit a task, when the API receives it, then access is denied using the existing authentication and error-envelope conventions.
+5. Given the task-creation popup is open, when the user presses `Save`, then valid task data is persisted and the new task appears in the selected section without a full page reload.
+6. Given the task-creation or edit popup is open, when the user presses `Cancel`, then the popup closes, no task is created or changed, and the board remains unchanged.
+7. Given a create or edit request fails, when the API returns an error, then the draft remains available for correction, the board does not silently lose existing data, and an actionable non-sensitive error is shown.
+8. Given a create or edit request succeeds, when the operation completes, then the board state is refreshed or updated from the persisted response, and clear save feedback is exposed to the user.
+9. Given the user reloads the same week or logs out and back in, when the board is loaded, then created and edited tasks retain their title, notes, status, week context, and day/shared-week location.
+10. Given the board is rendered in workweek or full-week mode, when tasks are loaded, then shared-week tasks remain in the shared section and day tasks render in their matching date column; changing view mode must not duplicate or discard tasks.
+11. Given an unauthenticated request attempts to create or edit a task, when the API receives it, then access is denied using the existing authentication and error-envelope conventions.
 
 ## Scope Boundaries
 
@@ -64,17 +66,19 @@ so that I can organize planned work with the right temporal scope.
 
 ### Task 4 - Build create/edit interaction
 
-- [ ] Add a reusable task editor reachable from the existing board quick-add entry point and from each shared/day section.
+- [ ] Add a reusable task editor opened by the `+` button in the shared-week header and each day-column header.
 - [ ] Provide controls for title, optional notes, and placement; default placement must match the section from which the editor opened.
+- [ ] Provide explicit `Save` and `Cancel` buttons; `Cancel` closes the popup without creating or changing a task.
 - [ ] Provide a clear edit entry point on each task card once tasks are rendered.
 - [ ] Keep the editor keyboard-operable with labels, logical focus order, visible validation, and screen-reader-friendly save/error feedback.
 - [ ] Keep task card content concise: title plus optional short notes preview, consistent with the existing UX guidance.
+- [ ] Use a familiar plus symbol for compact creation actions, with an accessible label and tooltip for the control.
 - [ ] Use subtle functional feedback only; do not introduce flashy transitions or a new visual system.
 
 ### Task 5 - Tests and validation
 
 - [ ] Add backend unit/integration coverage for title validation, default status, shared-week placement, day placement, week scoping, create, update, and unauthenticated access.
-- [ ] Add frontend tests for editor validation, create from shared/day context, edit persistence, error draft retention, and rendering in the correct section.
+- [ ] Add frontend tests for `+` popup opening, editor validation, Save, Cancel, create from shared/day context, edit persistence, error draft retention, and rendering in the correct section.
 - [ ] Add a regression test that reloads or refetches the same week and verifies task persistence.
 - [ ] Add a regression test for workweek/full-week view switching with tasks present.
 - [ ] Run focused frontend tests, frontend lint/build, backend tests, and backend build; record commands and outcomes in the Dev Agent Record.
@@ -130,7 +134,7 @@ so that I can organize planned work with the right temporal scope.
 
 ## Definition of Done
 
-- [ ] Authenticated users can create a regular task in shared-week or day context.
+- [ ] Authenticated users can open task creation with `+` from shared-week or day context and save a regular task.
 - [ ] Authenticated users can edit title, notes, status, and placement and see the result without a full reload.
 - [ ] Empty/whitespace-only titles are rejected inline and server-side.
 - [ ] Tasks persist by Monday-based week and reload in the correct section/date column.
