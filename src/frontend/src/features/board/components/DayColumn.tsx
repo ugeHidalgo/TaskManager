@@ -7,13 +7,19 @@ export interface DayColumnProps {
   dayName: string;
   /** Tasks or content to display in this column */
   children?: ReactNode;
+  onAddTask?: () => void;
 }
 
 /**
  * DayColumn component represents a single day in the week layout.
  * Displays the day name and date, with a container for tasks.
  */
-export function DayColumn({ date, dayName, children }: DayColumnProps) {
+export function DayColumn({
+  date,
+  dayName,
+  children,
+  onAddTask,
+}: DayColumnProps) {
   const formattedDate = formatDate(date);
   const dayKey = `${dayName.toLowerCase()}-${date.toISOString().slice(0, 10)}`;
   const headingId = `day-column-title-${dayKey}`;
@@ -26,6 +32,15 @@ export function DayColumn({ date, dayName, children }: DayColumnProps) {
           {dayName}
           <span className="day-column-date">{formattedDate}</span>
         </h3>
+        <button
+          type="button"
+          className="add-task-button"
+          onClick={onAddTask}
+          aria-label={`Add task to ${dayName}`}
+          title="Add task"
+        >
+          +
+        </button>
       </header>
 
       <article

@@ -5,3 +5,4 @@ export {
   type WeekLayoutProps,
 } from "./WeekLayout";
 export { WeekSection, type WeekSectionProps } from "./WeekSection";
+export { TaskEditor } from "./TaskEditor";

@@ -7,6 +7,7 @@ export interface WeekSectionProps {
   weekEnd: Date;
   /** Tasks or content to display in the week section */
   children?: ReactNode;
+  onAddTask?: () => void;
 }
 
 /**
@@ -17,6 +18,7 @@ export function WeekSection({
   weekStart,
   weekEnd,
   children,
+  onAddTask,
 }: WeekSectionProps) {
   const weekDisplay = formatWeekRange(weekStart, weekEnd);
   const headingId = "week-section-title";
@@ -31,6 +33,15 @@ export function WeekSection({
           Week Tasks
         </h2>
         <span className="week-section-date">{weekDisplay}</span>
+        <button
+          type="button"
+          className="add-task-button"
+          onClick={onAddTask}
+          aria-label="Add task to shared week"
+          title="Add task"
+        >
+          +
+        </button>
       </header>
 
       <article

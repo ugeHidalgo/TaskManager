@@ -2,12 +2,19 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   formatDateOnly,
+  createTask,
   getBoardForWeek,
   getTasksForWeek,
+  updateTask,
+  type SaveTaskInput,
   type TaskPayload,
 } from "../api/board";
 import { useAuth } from "../auth/useAuth";
-import { WeekLayout, type BoardViewMode } from "../features/board/components";
+import {
+  TaskEditor,
+  WeekLayout,
+  type BoardViewMode,
+} from "../features/board/components";
 import {
   useWeekCalculation,
   formatWeekDisplay,
@@ -31,6 +38,15 @@ export function BoardPage() {
     getInitialBoardViewMode,
   );
   const [tasks, setTasks] = useState<TaskPayload[]>([]);
+  const [loadedWeekStartDate, setLoadedWeekStartDate] = useState<string | null>(
+    null,
+  );
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editorTask, setEditorTask] = useState<TaskPayload | undefined>();
+  const [editorDayDate, setEditorDayDate] = useState<Date | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const { weekStart, weekEnd } = useWeekCalculation(selectedDate);
   const weekStartDateParam = formatDateOnly(weekStart);
   const weekDisplay = formatWeekDisplay(weekStart, weekEnd);
@@ -43,7 +59,6 @@ export function BoardPage() {
     const sessionToken = token;
     let isCurrentRequest = true;
     const weekStartDate = new Date(`${weekStartDateParam}T00:00:00`);
-    setTasks([]);
 
     async function loadBoardWeek() {
       try {
@@ -55,6 +70,7 @@ export function BoardPage() {
           return;
         }
         setTasks(weekTasks);
+        setLoadedWeekStartDate(weekStartDateParam);
       } catch {
         if (!isCurrentRequest) {
           return;
@@ -75,6 +91,8 @@ export function BoardPage() {
     setSelectedDate((current) => shiftDateByDays(current, -7));
   }
 
+  const visibleTasks = loadedWeekStartDate === weekStartDateParam ? tasks : [];
+
   function handleNextWeek() {
     // Functional updates ensure rapid clicks apply in order without stale state.
     setSelectedDate((current) => shiftDateByDays(current, 7));
@@ -88,6 +106,43 @@ export function BoardPage() {
   function handleViewModeChange(mode: BoardViewMode) {
     setViewMode(mode);
     window.localStorage.setItem(BOARD_VIEW_MODE_KEY, mode);
+  }
+
+  function openTaskEditor(dayDate: Date | null, task?: TaskPayload) {
+    setIsEditorOpen(true);
+    setEditorTask(task);
+    setEditorDayDate(dayDate);
+    setEditorError(null);
+    setSaveMessage(null);
+  }
+
+  async function handleTaskSave(input: SaveTaskInput) {
+    if (!token) {
+      return;
+    }
+
+    setIsSaving(true);
+    setEditorError(null);
+
+    try {
+      if (editorTask) {
+        await updateTask(token, editorTask.id, input);
+      } else {
+        await createTask(token, input);
+      }
+
+      const refreshedTasks = await getTasksForWeek(token, weekStart);
+      setTasks(refreshedTasks);
+      setIsEditorOpen(false);
+      setEditorTask(undefined);
+      setSaveMessage(editorTask ? "Task updated." : "Task created.");
+    } catch (error) {
+      setEditorError(
+        error instanceof Error ? error.message : "Could not save the task.",
+      );
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function handleLogout() {
@@ -154,30 +209,72 @@ export function BoardPage() {
         </div>
       </header>
 
+      {saveMessage ? (
+        <p className="save-message" role="status">
+          {saveMessage}
+        </p>
+      ) : null}
+
       <WeekLayout
         weekStart={weekStart}
         weekEnd={weekEnd}
         viewMode={viewMode}
-        weekContent={renderTasks(tasks.filter((task) => task.dayDate === null))}
+        onAddTask={(dayDate) => openTaskEditor(dayDate)}
+        weekContent={renderTasks(
+          visibleTasks.filter((task) => task.dayDate === null),
+          (task) => openTaskEditor(null, task),
+        )}
         dayContent={Array.from({ length: 7 }, (_, dayIndex) => {
           const dayDate = formatDateOnly(shiftDateByDays(weekStart, dayIndex));
 
-          return renderTasks(tasks.filter((task) => task.dayDate === dayDate));
+          return renderTasks(
+            visibleTasks.filter((task) => task.dayDate === dayDate),
+            (task) => openTaskEditor(new Date(`${dayDate}T00:00:00`), task),
+          );
         })}
       />
+
+      {token && isEditorOpen ? (
+        <TaskEditor
+          weekStart={weekStart}
+          initialDayDate={editorDayDate}
+          task={editorTask}
+          isSaving={isSaving}
+          errorMessage={editorError}
+          onCancel={() => {
+            setIsEditorOpen(false);
+            setEditorTask(undefined);
+          }}
+          onSave={handleTaskSave}
+        />
+      ) : null}
     </main>
   );
 }
 
-function renderTasks(tasks: TaskPayload[]) {
+function renderTasks(
+  tasks: TaskPayload[],
+  onEdit: (task: TaskPayload) => void,
+) {
   if (tasks.length === 0) {
     return undefined;
   }
 
   return tasks.map((task) => (
-    <div key={task.id}>
-      <strong>{task.title}</strong>
-      {task.notes ? <span> - {task.notes}</span> : null}
+    <div key={task.id} className="task-item">
+      <div>
+        <strong>{task.title}</strong>
+        {task.notes ? <span> - {task.notes}</span> : null}
+      </div>
+      <button
+        type="button"
+        className="edit-task-button"
+        onClick={() => onEdit(task)}
+        aria-label="Edit task"
+        title="Edit task"
+      >
+        ✎
+      </button>
     </div>
   ));
 }

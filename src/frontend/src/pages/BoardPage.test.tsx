@@ -36,10 +36,7 @@ vi.mock("../lib/session", () => ({
   clearToken: vi.fn(),
 }));
 
-function buildBoardResponseFromUrl(
-  input: string,
-  tasks: unknown[] = [],
-): Response {
+function buildBoardResponseFromUrl(input: string, tasks: unknown[] = []) {
   const url = new URL(input);
   const weekStartDate = url.searchParams.get("week_start_date") ?? "";
 
@@ -226,7 +223,9 @@ describe("BoardPage week navigation", () => {
     );
 
     expect(await screen.findByText("Plan shared work")).toBeInTheDocument();
-    expect(await screen.findByText("Plan Monday work")).toBeInTheDocument();
-    expect(screen.getByText("Review priorities")).toBeInTheDocument();
+    const dailyTaskTitle = await screen.findByText("Plan Monday work");
+    expect(dailyTaskTitle.closest(".task-item")).toHaveTextContent(
+      "Review priorities",
+    );
   });
 });
