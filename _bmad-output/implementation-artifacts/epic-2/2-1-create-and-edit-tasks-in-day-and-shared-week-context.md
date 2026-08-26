@@ -58,11 +58,11 @@ so that I can organize planned work with the right temporal scope.
 
 ### Task 3 - Integrate board data flow
 
-- [ ] Extend the existing board loading contract/client in `src/frontend/src/api/board.ts` or introduce a focused task API module that follows its authentication and error-handling pattern.
-- [ ] Load task data with the selected `week_start_date` and map shared-week placement and day placement into the existing `WeekSection` and `DayColumn` components.
-- [ ] Ensure a task created or edited in the currently selected week is visible immediately after the persisted operation; avoid a hard navigation or full-page reload.
-- [ ] Ensure navigation to another week refetches the correct week data and does not display stale tasks from the previous week.
-- [ ] Keep the current stale-request protection for rapid week navigation.
+- [x] Extend the existing board loading contract/client in `src/frontend/src/api/board.ts` or introduce a focused task API module that follows its authentication and error-handling pattern.
+- [x] Load task data with the selected `week_start_date` and map shared-week placement and day placement into the existing `WeekSection` and `DayColumn` components.
+- [x] Ensure a task created or edited in the currently selected week is visible immediately after the persisted operation; avoid a hard navigation or full-page reload.
+- [x] Ensure navigation to another week refetches the correct week data and does not display stale tasks from the previous week.
+- [x] Keep the current stale-request protection for rapid week navigation.
 
 ### Task 4 - Build create/edit interaction
 
