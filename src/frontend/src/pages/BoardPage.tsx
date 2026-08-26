@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { formatDateOnly, getBoardForWeek } from "../api/board";
+import {
+  formatDateOnly,
+  getBoardForWeek,
+  getTasksForWeek,
+  type TaskPayload,
+} from "../api/board";
 import { useAuth } from "../auth/useAuth";
 import { WeekLayout, type BoardViewMode } from "../features/board/components";
 import {
@@ -25,6 +30,7 @@ export function BoardPage() {
   const [viewMode, setViewMode] = useState<BoardViewMode>(
     getInitialBoardViewMode,
   );
+  const [tasks, setTasks] = useState<TaskPayload[]>([]);
   const { weekStart, weekEnd } = useWeekCalculation(selectedDate);
   const weekStartDateParam = formatDateOnly(weekStart);
   const weekDisplay = formatWeekDisplay(weekStart, weekEnd);
@@ -37,14 +43,18 @@ export function BoardPage() {
     const sessionToken = token;
     let isCurrentRequest = true;
     const weekStartDate = new Date(`${weekStartDateParam}T00:00:00`);
+    setTasks([]);
 
     async function loadBoardWeek() {
       try {
-        await getBoardForWeek(sessionToken, weekStartDate);
+        const [, weekTasks] = await Promise.all([
+          getBoardForWeek(sessionToken, weekStartDate),
+          getTasksForWeek(sessionToken, weekStartDate),
+        ]);
         if (!isCurrentRequest) {
           return;
         }
-        // Board data loaded successfully
+        setTasks(weekTasks);
       } catch {
         if (!isCurrentRequest) {
           return;
@@ -144,7 +154,30 @@ export function BoardPage() {
         </div>
       </header>
 
-      <WeekLayout weekStart={weekStart} weekEnd={weekEnd} viewMode={viewMode} />
+      <WeekLayout
+        weekStart={weekStart}
+        weekEnd={weekEnd}
+        viewMode={viewMode}
+        weekContent={renderTasks(tasks.filter((task) => task.dayDate === null))}
+        dayContent={Array.from({ length: 7 }, (_, dayIndex) => {
+          const dayDate = formatDateOnly(shiftDateByDays(weekStart, dayIndex));
+
+          return renderTasks(tasks.filter((task) => task.dayDate === dayDate));
+        })}
+      />
     </main>
   );
+}
+
+function renderTasks(tasks: TaskPayload[]) {
+  if (tasks.length === 0) {
+    return undefined;
+  }
+
+  return tasks.map((task) => (
+    <div key={task.id}>
+      <strong>{task.title}</strong>
+      {task.notes ? <span> - {task.notes}</span> : null}
+    </div>
+  ));
 }

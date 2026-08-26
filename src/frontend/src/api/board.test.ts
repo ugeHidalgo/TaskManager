@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { formatDateOnly, getBoardForWeek } from "./board";
+import { formatDateOnly, getBoardForWeek, getTasksForWeek } from "./board";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -26,6 +26,26 @@ describe("board api", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("week_start_date=2026-08-03"),
+      {
+        headers: {
+          Authorization: "Bearer jwt-token",
+        },
+      },
+    );
+  });
+
+  it("requests tasks using the selected week", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await getTasksForWeek("jwt-token", new Date(2026, 7, 3));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/tasks?weekStartDate=2026-08-03"),
       {
         headers: {
           Authorization: "Bearer jwt-token",

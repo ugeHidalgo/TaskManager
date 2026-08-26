@@ -36,9 +36,19 @@ vi.mock("../lib/session", () => ({
   clearToken: vi.fn(),
 }));
 
-function buildBoardResponseFromUrl(input: string): Response {
+function buildBoardResponseFromUrl(
+  input: string,
+  tasks: unknown[] = [],
+): Response {
   const url = new URL(input);
   const weekStartDate = url.searchParams.get("week_start_date") ?? "";
+
+  if (url.pathname.endsWith("/tasks")) {
+    return new Response(JSON.stringify({ data: tasks }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   return new Response(
     JSON.stringify({
@@ -177,5 +187,46 @@ describe("BoardPage week navigation", () => {
         }),
       );
     });
+  });
+
+  it("renders shared and daily tasks in their matching sections", async () => {
+    const initialWeekStart = getWeekRange(new Date()).weekStart;
+    const dailyTaskDate = formatDateOnly(initialWeekStart);
+    const tasks = [
+      {
+        id: "shared-task",
+        weekWorkspaceId: "workspace-id",
+        dayDate: null,
+        title: "Plan shared work",
+        notes: null,
+        status: "Not Started",
+        createdAtUtc: "2026-08-26T10:00:00Z",
+        updatedAtUtc: "2026-08-26T10:00:00Z",
+      },
+      {
+        id: "daily-task",
+        weekWorkspaceId: "workspace-id",
+        dayDate: dailyTaskDate,
+        title: "Plan Monday work",
+        notes: "Review priorities",
+        status: "Not Started",
+        createdAtUtc: "2026-08-26T10:00:00Z",
+        updatedAtUtc: "2026-08-26T10:00:00Z",
+      },
+    ];
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      buildBoardResponseFromUrl(String(input), tasks),
+    );
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Plan shared work")).toBeInTheDocument();
+    expect(await screen.findByText("Plan Monday work")).toBeInTheDocument();
+    expect(screen.getByText("Review priorities")).toBeInTheDocument();
   });
 });
