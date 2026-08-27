@@ -228,4 +228,169 @@ describe("BoardPage week navigation", () => {
       "Review priorities",
     );
   });
+
+  it("opens the editor, validates the title, and cancels without saving", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) =>
+        buildBoardResponseFromUrl(String(input)),
+      );
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Add task to shared week" }),
+    );
+    expect(
+      screen.getByRole("dialog", { name: "New task" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Title is required.");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("creates a task from a day context and refreshes the board", async () => {
+    const user = userEvent.setup();
+    const weekStart = getWeekRange(new Date()).weekStart;
+    const dayDate = formatDateOnly(weekStart);
+    const createdTask = {
+      id: "created-task",
+      weekWorkspaceId: "workspace-id",
+      dayDate,
+      title: "Write report",
+      notes: "Use the latest data",
+      status: "Not Started",
+      createdAtUtc: "2026-08-26T10:00:00Z",
+      updatedAtUtc: "2026-08-26T10:00:00Z",
+    };
+    let storedTasks: unknown[] = [];
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/tasks")) {
+        if (init?.method === "POST") {
+          storedTasks = [createdTask];
+          return new Response(JSON.stringify({ data: createdTask }), {
+            status: 201,
+          });
+        }
+        return new Response(JSON.stringify({ data: storedTasks }), {
+          status: 200,
+        });
+      }
+      return buildBoardResponseFromUrl(String(input));
+    });
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Add task to Monday" }),
+    );
+    await user.type(screen.getByLabelText("Title"), "Write report");
+    await user.type(screen.getByLabelText("Notes"), "Use the latest data");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByText("Write report")).toBeInTheDocument();
+    expect(screen.getByText(/Use the latest data/)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Task created.");
+  });
+
+  it("edits a task and keeps the draft open when saving fails", async () => {
+    const user = userEvent.setup();
+    const task = {
+      id: "existing-task",
+      weekWorkspaceId: "workspace-id",
+      dayDate: null,
+      title: "Old title",
+      notes: "Existing notes",
+      status: "Not Started",
+      createdAtUtc: "2026-08-26T10:00:00Z",
+      updatedAtUtc: "2026-08-26T10:00:00Z",
+    };
+    let saveFailed = false;
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/tasks")) {
+        return new Response(JSON.stringify({ data: [task] }), { status: 200 });
+      }
+      if (init?.method === "PUT" && !saveFailed) {
+        saveFailed = true;
+        return new Response(
+          JSON.stringify({ error: { message: "Task could not be saved." } }),
+          { status: 500 },
+        );
+      }
+      return new Response(JSON.stringify({ data: task }), { status: 200 });
+    });
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Edit task" }));
+    const titleInput = screen.getByLabelText("Title");
+    await user.clear(titleInput);
+    await user.type(titleInput, "New title");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Task could not be saved.",
+    );
+    expect(screen.getByLabelText("Title")).toHaveValue("New title");
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("Task updated.");
+  });
+
+  it("keeps weekend tasks visible when switching to full-week mode", async () => {
+    const user = userEvent.setup();
+    const weekStart = getWeekRange(new Date()).weekStart;
+    const weekendDate = formatDateOnly(shiftDateByDays(weekStart, 6));
+    const weekendTask = {
+      id: "weekend-task",
+      weekWorkspaceId: "workspace-id",
+      dayDate: weekendDate,
+      title: "Weekend planning",
+      notes: null,
+      status: "Not Started",
+      createdAtUtc: "2026-08-26T10:00:00Z",
+      updatedAtUtc: "2026-08-26T10:00:00Z",
+    };
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      buildBoardResponseFromUrl(String(input), [weekendTask]),
+    );
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByText("Weekend planning")).toBeNull();
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "View" }),
+      "fullweek",
+    );
+    expect(await screen.findByText("Weekend planning")).toBeInTheDocument();
+  });
 });

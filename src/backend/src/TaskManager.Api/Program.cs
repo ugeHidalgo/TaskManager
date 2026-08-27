@@ -195,3 +195,5 @@ app.MapPut("/api/v1/tasks/{taskId:guid}", [Authorize] (
     facade.UpdateTaskAsync(taskId, httpContext, request, dbContext, cancellationToken));
 
 app.Run();
+
+public partial class Program;

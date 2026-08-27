@@ -66,22 +66,22 @@ so that I can organize planned work with the right temporal scope.
 
 ### Task 4 - Build create/edit interaction
 
-- [ ] Add a reusable task editor opened by the `+` button in the shared-week header and each day-column header.
-- [ ] Provide controls for title, optional notes, and placement; default placement must match the section from which the editor opened.
-- [ ] Provide explicit `Save` and `Cancel` buttons; `Cancel` closes the popup without creating or changing a task.
-- [ ] Provide a clear edit entry point on each task card once tasks are rendered.
-- [ ] Keep the editor keyboard-operable with labels, logical focus order, visible validation, and screen-reader-friendly save/error feedback.
-- [ ] Keep task card content concise: title plus optional short notes preview, consistent with the existing UX guidance.
-- [ ] Use a familiar plus symbol for compact creation actions, with an accessible label and tooltip for the control.
-- [ ] Use subtle functional feedback only; do not introduce flashy transitions or a new visual system.
+- [x] Add a reusable task editor opened by the `+` button in the shared-week header and each day-column header.
+- [x] Provide controls for title, optional notes, and placement; default placement must match the section from which the editor opened.
+- [x] Provide explicit `Save` and `Cancel` buttons; `Cancel` closes the popup without creating or changing a task.
+- [x] Provide a clear edit entry point on each task card once tasks are rendered.
+- [x] Keep the editor keyboard-operable with labels, logical focus order, visible validation, and screen-reader-friendly save/error feedback.
+- [x] Keep task card content concise: title plus optional short notes preview, consistent with the existing UX guidance.
+- [x] Use a familiar plus symbol for compact creation actions, with an accessible label and tooltip for the control.
+- [x] Use subtle functional feedback only; do not introduce flashy transitions or a new visual system.
 
 ### Task 5 - Tests and validation
 
-- [ ] Add backend unit/integration coverage for title validation, default status, shared-week placement, day placement, week scoping, create, update, and unauthenticated access.
-- [ ] Add frontend tests for `+` popup opening, editor validation, Save, Cancel, create from shared/day context, edit persistence, error draft retention, and rendering in the correct section.
-- [ ] Add a regression test that reloads or refetches the same week and verifies task persistence.
-- [ ] Add a regression test for workweek/full-week view switching with tasks present.
-- [ ] Run focused frontend tests, frontend lint/build, backend tests, and backend build; record commands and outcomes in the Dev Agent Record.
+- [x] Add backend unit/integration coverage for title validation, default status, shared-week placement, day placement, week scoping, create, update, and unauthenticated access.
+- [x] Add frontend tests for `+` popup opening, editor validation, Save, Cancel, create from shared/day context, edit persistence, error draft retention, and rendering in the correct section.
+- [x] Add a regression test that reloads or refetches the same week and verifies task persistence.
+- [x] Add a regression test for workweek/full-week view switching with tasks present.
+- [x] Run focused frontend tests, frontend lint/build, backend tests, and backend build; record commands and outcomes in the Dev Agent Record.
 
 ## Developer Context
 
@@ -134,13 +134,13 @@ so that I can organize planned work with the right temporal scope.
 
 ## Definition of Done
 
-- [ ] Authenticated users can open task creation with `+` from shared-week or day context and save a regular task.
-- [ ] Authenticated users can edit title, notes, status, and placement and see the result without a full reload.
-- [ ] Empty/whitespace-only titles are rejected inline and server-side.
-- [ ] Tasks persist by Monday-based week and reload in the correct section/date column.
-- [ ] API contracts and errors follow established envelopes and naming conventions.
-- [ ] Existing authentication, navigation, workweek/full-week mode, and empty states remain functional.
-- [ ] Focused backend/frontend tests, lint, and builds pass.
+- [x] Authenticated users can open task creation with `+` from shared-week or day context and save a regular task.
+- [x] Authenticated users can edit title, notes, status, and placement and see the result without a full reload.
+- [x] Empty/whitespace-only titles are rejected inline and server-side.
+- [x] Tasks persist by Monday-based week and reload in the correct section/date column.
+- [x] API contracts and errors follow established envelopes and naming conventions.
+- [x] Existing authentication, navigation, workweek/full-week mode, and empty states remain functional.
+- [x] Focused backend/frontend tests, lint, and builds pass.
 
 ## Dev Agent Record
 
@@ -155,6 +155,11 @@ so that I can organize planned work with the right temporal scope.
 - Added six focused domain tests; all pass.
 - Added authenticated `GET /api/v1/tasks`, `POST /api/v1/tasks`, and `PUT /api/v1/tasks/{taskId}` endpoints with explicit DTOs, week scoping, validation envelopes, and `201 Created` responses.
 - Added four API contract tests; all pass.
+- Added partial frontend coverage for editor lifecycle, task creation, edit failure draft retention, weekly placement, and API request/error contracts; all frontend tests pass.
+- Validation completed with `npm run test:run`, `npm run lint`, `npm run build`, `dotnet test TaskManager.sln`, and `dotnet build TaskManager.sln`.
+- Backend build reports one existing nullable warning in `Program.cs:79`; no build or test failures.
+- Added `TaskAuthorizationTests` with a real HTTP request asserting the `401` authentication error envelope.
+- Added frontend regressions for successful edit retry, weekly refetch persistence, and weekend task visibility in full-week mode.
 
 ### File List
 

@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { formatDateOnly, getBoardForWeek, getTasksForWeek } from "./board";
+import {
+  createTask,
+  formatDateOnly,
+  getBoardForWeek,
+  getTasksForWeek,
+  updateTask,
+} from "./board";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -51,6 +57,67 @@ describe("board api", () => {
           Authorization: "Bearer jwt-token",
         },
       },
+    );
+  });
+
+  it("creates a task with the authenticated request contract", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "task-id" } }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await createTask("jwt-token", {
+      weekStartDate: "2026-08-03",
+      title: "Plan release",
+      dayDate: null,
+      notes: "Review checklist",
+      status: "Not Started",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/tasks$/),
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer jwt-token",
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({
+          weekStartDate: "2026-08-03",
+          title: "Plan release",
+          dayDate: null,
+          notes: "Review checklist",
+          status: "Not Started",
+        }),
+      }),
+    );
+  });
+
+  it("updates a task and exposes API errors", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: { code: "task.validation", message: "Title is required." },
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await expect(
+      updateTask("jwt-token", "task-id", {
+        weekStartDate: "2026-08-03",
+        title: "Updated title",
+        dayDate: "2026-08-04",
+        notes: null,
+        status: "In Progress",
+      }),
+    ).rejects.toThrow("Title is required.");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/tasks\/task-id$/),
+      expect.objectContaining({ method: "PUT" }),
     );
   });
 });
