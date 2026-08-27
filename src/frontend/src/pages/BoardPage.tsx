@@ -145,6 +145,37 @@ export function BoardPage() {
     }
   }
 
+  async function handleTaskStatusToggle(task: TaskPayload) {
+    if (!token) {
+      return;
+    }
+
+    const nextStatus = getNextTaskStatus(task.status);
+    try {
+      await updateTask(token, task.id, {
+        weekStartDate: weekStartDateParam,
+        title: task.title,
+        dayDate: task.dayDate,
+        notes: task.notes,
+        status: nextStatus,
+      });
+      setTasks((currentTasks) =>
+        currentTasks.map((currentTask) =>
+          currentTask.id === task.id
+            ? { ...currentTask, status: nextStatus }
+            : currentTask,
+        ),
+      );
+      setSaveMessage("Task status updated.");
+    } catch (error) {
+      setSaveMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not update task status.",
+      );
+    }
+  }
+
   function handleLogout() {
     const confirmed = window.confirm("Are you sure you want to log out?");
     if (!confirmed) {
@@ -223,6 +254,7 @@ export function BoardPage() {
         weekContent={renderTasks(
           visibleTasks.filter((task) => task.dayDate === null),
           (task) => openTaskEditor(null, task),
+          handleTaskStatusToggle,
         )}
         dayContent={Array.from({ length: 7 }, (_, dayIndex) => {
           const dayDate = formatDateOnly(shiftDateByDays(weekStart, dayIndex));
@@ -230,6 +262,7 @@ export function BoardPage() {
           return renderTasks(
             visibleTasks.filter((task) => task.dayDate === dayDate),
             (task) => openTaskEditor(new Date(`${dayDate}T00:00:00`), task),
+            handleTaskStatusToggle,
           );
         })}
       />
@@ -255,6 +288,7 @@ export function BoardPage() {
 function renderTasks(
   tasks: TaskPayload[],
   onEdit: (task: TaskPayload) => void,
+  onStatusToggle: (task: TaskPayload) => void,
 ) {
   if (tasks.length === 0) {
     return undefined;
@@ -263,8 +297,19 @@ function renderTasks(
   return tasks.map((task) => (
     <div key={task.id} className="task-item">
       <div>
-        <strong>{task.title}</strong>
-        {task.notes ? <span> - {task.notes}</span> : null}
+        <div className="task-title-row">
+          <button
+            type="button"
+            className={`task-status-indicator ${getTaskStatusClass(task.status)}`}
+            onDoubleClick={() => void onStatusToggle(task)}
+            aria-label={`Change status for ${task.title}`}
+            title="Double-click to change task status"
+          />
+          <strong className="task-title">{task.title}</strong>
+        </div>
+        {task.notes ? (
+          <span className="task-description"> - {task.notes}</span>
+        ) : null}
       </div>
       <button
         type="button"
@@ -277,4 +322,28 @@ function renderTasks(
       </button>
     </div>
   ));
+}
+
+function getNextTaskStatus(status: string): string {
+  if (status === "Not Started") {
+    return "In Progress";
+  }
+
+  if (status === "In Progress") {
+    return "Completed";
+  }
+
+  return "Not Started";
+}
+
+function getTaskStatusClass(status: string): string {
+  if (status === "In Progress") {
+    return "task-status-in-progress";
+  }
+
+  if (status === "Completed") {
+    return "task-status-completed";
+  }
+
+  return "task-status-not-started";
 }

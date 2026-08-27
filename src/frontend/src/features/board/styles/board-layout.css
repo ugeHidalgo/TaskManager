@@ -127,6 +127,56 @@
   background: #fff;
 }
 
+.task-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.task-title {
+  font-size: 0.9rem;
+}
+
+.task-status-indicator {
+  flex: 0 0 auto;
+  width: 0.75rem;
+  height: 0.75rem;
+  padding: 0;
+  border: 1px solid #111827;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.task-status-indicator:hover {
+  background: transparent;
+}
+
+.task-status-in-progress {
+  border-color: #15803d;
+  background: #22c55e;
+}
+
+.task-status-in-progress:hover {
+  background: #22c55e;
+}
+
+.task-status-completed {
+  border-color: #111827;
+  background: #111827;
+}
+
+.task-status-completed:hover {
+  background: #111827;
+}
+
+.task-description {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.25;
+}
+
 .task-editor-backdrop {
   position: fixed;
   inset: 0;
