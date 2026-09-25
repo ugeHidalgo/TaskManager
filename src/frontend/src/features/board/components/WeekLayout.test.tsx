@@ -23,6 +23,7 @@ describe("WeekLayout", () => {
     ).toBeInTheDocument();
 
     expect(screen.getByText("No week tasks")).toBeInTheDocument();
+    expect(screen.queryByText("Jul 27 - Aug 2")).toBeNull();
   });
 
   it("renders five workweek day columns by default", () => {

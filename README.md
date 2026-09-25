@@ -92,6 +92,70 @@ Services:
 - backend: http://localhost:8080
 - postgres: localhost:5432
 
+## Manually Start the Stack
+
+Follow these steps from the repository root:
+
+1. Start Docker Desktop and confirm that Docker is available:
+
+   ```bash
+   docker info
+   ```
+
+2. Create the local environment variables file:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Open `.env` and replace `JWT_SECRET` with a random key of at least 32 characters.
+
+4. Build and start all three services in the background:
+
+   ```bash
+   docker compose up --build -d
+   ```
+
+5. Check that PostgreSQL is healthy and that the backend and frontend are running:
+
+   ```bash
+   docker compose ps
+   ```
+
+6. Verify that the API responds successfully:
+
+   ```bash
+   curl http://localhost:8080/health
+   ```
+
+7. Run the authentication smoke test:
+
+   ```bash
+   bash scripts/smoke-auth.sh
+   ```
+
+8. Open http://localhost:5173 and sign in with the development credentials:
+   - username: `admin`
+   - password: `Admin123!`
+
+To view real-time logs:
+
+```bash
+docker compose logs -f
+```
+
+To stop the stack without deleting PostgreSQL data:
+
+```bash
+docker compose down
+```
+
+To stop the stack and also delete the data volume:
+
+```bash
+docker compose down -v
+```
+
 ## Auth API Endpoints
 
 - POST /api/v1/auth/login
