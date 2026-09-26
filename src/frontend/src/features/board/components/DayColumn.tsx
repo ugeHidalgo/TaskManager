@@ -7,6 +7,7 @@ export interface DayColumnProps {
   dayName: string;
   /** Tasks or content to display in this column */
   children?: ReactNode;
+  disabled?: boolean;
   onAddTask?: () => void;
 }
 
@@ -18,6 +19,7 @@ export function DayColumn({
   date,
   dayName,
   children,
+  disabled = false,
   onAddTask,
 }: DayColumnProps) {
   const formattedDate = formatDate(date);
@@ -35,6 +37,7 @@ export function DayColumn({
         <button
           type="button"
           className="add-task-button"
+          disabled={disabled}
           onClick={onAddTask}
           aria-label={`Add task to ${dayName}`}
           title="Add task"

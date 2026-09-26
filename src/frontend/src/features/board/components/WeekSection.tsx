@@ -7,6 +7,7 @@ export interface WeekSectionProps {
   weekEnd: Date;
   /** Tasks or content to display in the week section */
   children?: ReactNode;
+  disabled?: boolean;
   onAddTask?: () => void;
 }
 
@@ -14,7 +15,11 @@ export interface WeekSectionProps {
  * WeekSection component represents the shared week tasks container.
  * This section spans the full width above daily columns.
  */
-export function WeekSection({ children, onAddTask }: WeekSectionProps) {
+export function WeekSection({
+  children,
+  disabled = false,
+  onAddTask,
+}: WeekSectionProps) {
   const headingId = "week-section-title";
 
   return (
@@ -26,6 +31,7 @@ export function WeekSection({ children, onAddTask }: WeekSectionProps) {
         <button
           type="button"
           className="add-task-button"
+          disabled={disabled}
           onClick={onAddTask}
           aria-label="Add task to shared week"
           title="Add task"

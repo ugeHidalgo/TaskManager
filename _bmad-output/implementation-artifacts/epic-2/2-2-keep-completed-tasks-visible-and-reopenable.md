@@ -1,6 +1,6 @@
 # Story 2.2: Keep Completed Tasks Visible and Reopenable
 
-Status: in-progress
+Status: done
 
 Epic: 2 - Task Lifecycle and Completion  
 Story ID: 2.2  
@@ -34,17 +34,17 @@ so that I can keep progress context without losing the ability to reactivate wor
 
 ### Task 2 - Board presentation and interaction
 
-- [ ] Keep the completion checkbox adjacent to the task title.
-- [ ] Render completed tasks with minimized spacing and gray styling without hiding title or reopen action.
-- [ ] Provide a keyboard-operable reopen action and accessible state announcement.
-- [ ] Preserve shared-week/day placement and workweek/full-week rendering.
+- [x] Keep the completion checkbox adjacent to the task title.
+- [x] Render completed tasks with minimized spacing and gray styling without hiding title or reopen action.
+- [x] Provide a keyboard-operable reopen action and accessible state announcement.
+- [x] Preserve shared-week/day placement and workweek/full-week rendering.
 
 ### Task 3 - Tests and validation
 
-- [ ] Test completion persistence, reopen persistence, reload behavior, and failed-operation rollback.
-- [ ] Test that completed tasks remain in their original section and position context.
-- [ ] Test non-color completion cues and accessible labels.
-- [ ] Run focused frontend/backend tests, lint, and builds.
+- [x] Test completion persistence, reopen persistence, reload behavior, and failed-operation rollback.
+- [x] Test that completed tasks remain in their original section and position context.
+- [x] Test non-color completion cues and accessible labels.
+- [x] Run focused frontend/backend tests, lint, and builds.
 
 ## Scope Boundaries
 
@@ -69,11 +69,11 @@ so that I can keep progress context without losing the ability to reactivate wor
 
 ## Definition of Done
 
-- [ ] Tasks can be completed and reopened from the board.
-- [ ] Completed tasks remain visible, minimized, and persist across reloads.
-- [ ] Completion state has a non-color accessible cue.
-- [ ] Failed updates roll back without losing the prior task state.
-- [ ] Focused tests and quality gates pass.
+- [x] Tasks can be completed and reopened from the board.
+- [x] Completed tasks remain visible, minimized, and persist across reloads.
+- [x] Completion state has a non-color accessible cue.
+- [x] Failed updates roll back without losing the prior task state.
+- [x] Focused tests and quality gates pass.
 
 ## Dev Agent Record
 
@@ -85,8 +85,19 @@ so that I can keep progress context without losing the ability to reactivate wor
 
 - Reused Story 2.1's authenticated task update contract; no new endpoint or persistence schema was needed.
 - Added regression coverage for complete/reopen persistence and stable placement/order, plus unauthenticated update rejection without state mutation.
+- Task 2 replaces the double-click status cycle with a native, task-labelled checkbox; completion persists as `Completed` and reopening persists as `Not Started` without optimistic state changes.
+- Completed cards use compact neutral-gray styling with readable titles, visible edit/reopen controls, keyboard focus indication, and polite success/failure announcements.
+- Existing `In Progress` tasks retain a visible textual status cue; controls use distinct board-position-prefixed accessible names.
+- Board task controls remain disabled during status persistence or editor saves, preventing overlapping updates from applying stale results.
+- Validation: 23 focused frontend tests passed; ESLint, the frontend production build, and `git diff --check` passed.
 
 ### File List
 
 - `src/backend/tests/TaskApiTests.cs`
 - `src/backend/tests/TaskAuthorizationTests.cs`
+- `src/frontend/src/pages/BoardPage.tsx`
+- `src/frontend/src/features/board/components/WeekLayout.tsx`
+- `src/frontend/src/features/board/components/WeekSection.tsx`
+- `src/frontend/src/features/board/components/DayColumn.tsx`
+- `src/frontend/src/features/board/styles/board-layout.css`
+- `src/frontend/src/pages/BoardPage.test.tsx`

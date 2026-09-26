@@ -38,6 +38,9 @@ export function BoardPage() {
     getInitialBoardViewMode,
   );
   const [tasks, setTasks] = useState<TaskPayload[]>([]);
+  const [pendingStatusTaskIds, setPendingStatusTaskIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [loadedWeekStartDate, setLoadedWeekStartDate] = useState<string | null>(
     null,
   );
@@ -92,6 +95,11 @@ export function BoardPage() {
   }
 
   const visibleTasks = loadedWeekStartDate === weekStartDateParam ? tasks : [];
+  const disableTaskActions =
+    isEditorOpen || isSaving || pendingStatusTaskIds.size > 0;
+  const taskAccessiblePositions = new Map(
+    visibleTasks.map((task, index) => [task.id, index + 1]),
+  );
 
   function handleNextWeek() {
     // Functional updates ensure rapid clicks apply in order without stale state.
@@ -150,7 +158,9 @@ export function BoardPage() {
       return;
     }
 
-    const nextStatus = getNextTaskStatus(task.status);
+    const nextStatus =
+      task.status === "Completed" ? "Not Started" : "Completed";
+    setPendingStatusTaskIds((current) => new Set(current).add(task.id));
     try {
       await updateTask(token, task.id, {
         weekStartDate: weekStartDateParam,
@@ -166,13 +176,21 @@ export function BoardPage() {
             : currentTask,
         ),
       );
-      setSaveMessage("Task status updated.");
+      setSaveMessage(
+        nextStatus === "Completed" ? "Task completed." : "Task reopened.",
+      );
     } catch (error) {
       setSaveMessage(
         error instanceof Error
           ? error.message
-          : "Could not update task status.",
+          : "Could not update task status. Please try again.",
       );
+    } finally {
+      setPendingStatusTaskIds((current) => {
+        const next = new Set(current);
+        next.delete(task.id);
+        return next;
+      });
     }
   }
 
@@ -241,7 +259,7 @@ export function BoardPage() {
       </header>
 
       {saveMessage ? (
-        <p className="save-message" role="status">
+        <p className="save-message" role="status" aria-live="polite">
           {saveMessage}
         </p>
       ) : null}
@@ -250,11 +268,15 @@ export function BoardPage() {
         weekStart={weekStart}
         weekEnd={weekEnd}
         viewMode={viewMode}
+        taskActionsDisabled={disableTaskActions}
         onAddTask={(dayDate) => openTaskEditor(dayDate)}
         weekContent={renderTasks(
           visibleTasks.filter((task) => task.dayDate === null),
           (task) => openTaskEditor(null, task),
           handleTaskStatusToggle,
+          pendingStatusTaskIds,
+          taskAccessiblePositions,
+          disableTaskActions,
         )}
         dayContent={Array.from({ length: 7 }, (_, dayIndex) => {
           const dayDate = formatDateOnly(shiftDateByDays(weekStart, dayIndex));
@@ -263,6 +285,9 @@ export function BoardPage() {
             visibleTasks.filter((task) => task.dayDate === dayDate),
             (task) => openTaskEditor(new Date(`${dayDate}T00:00:00`), task),
             handleTaskStatusToggle,
+            pendingStatusTaskIds,
+            taskAccessiblePositions,
+            disableTaskActions,
           );
         })}
       />
@@ -289,61 +314,55 @@ function renderTasks(
   tasks: TaskPayload[],
   onEdit: (task: TaskPayload) => void,
   onStatusToggle: (task: TaskPayload) => void,
+  pendingStatusTaskIds: ReadonlySet<string>,
+  taskAccessiblePositions: ReadonlyMap<string, number>,
+  disableTaskActions: boolean,
 ) {
   if (tasks.length === 0) {
     return undefined;
   }
 
-  return tasks.map((task) => (
-    <div key={task.id} className="task-item">
-      <div>
-        <div className="task-title-row">
-          <button
-            type="button"
-            className={`task-status-indicator ${getTaskStatusClass(task.status)}`}
-            onDoubleClick={() => void onStatusToggle(task)}
-            aria-label={`Change status for ${task.title}`}
-            title="Double-click to change task status"
-          />
-          <strong className="task-title">{task.title}</strong>
-        </div>
-        {task.notes ? (
-          <span className="task-description"> - {task.notes}</span>
-        ) : null}
-      </div>
-      <button
-        type="button"
-        className="edit-task-button"
-        onClick={() => onEdit(task)}
-        aria-label="Edit task"
-        title="Edit task"
+  return tasks.map((task) => {
+    const isCompleted = task.status === "Completed";
+    const isUpdatingStatus = pendingStatusTaskIds.has(task.id);
+    const taskPosition = taskAccessiblePositions.get(task.id) ?? 1;
+
+    return (
+      <div
+        key={task.id}
+        className={`task-item${isCompleted ? " task-item-completed" : ""}`}
+        aria-busy={isUpdatingStatus}
       >
-        ✎
-      </button>
-    </div>
-  ));
-}
-
-function getNextTaskStatus(status: string): string {
-  if (status === "Not Started") {
-    return "In Progress";
-  }
-
-  if (status === "In Progress") {
-    return "Completed";
-  }
-
-  return "Not Started";
-}
-
-function getTaskStatusClass(status: string): string {
-  if (status === "In Progress") {
-    return "task-status-in-progress";
-  }
-
-  if (status === "Completed") {
-    return "task-status-completed";
-  }
-
-  return "task-status-not-started";
+        <div>
+          <div className="task-title-row">
+            <input
+              type="checkbox"
+              className="task-completion-checkbox"
+              checked={isCompleted}
+              disabled={disableTaskActions}
+              onChange={() => void onStatusToggle(task)}
+              aria-label={`Task ${taskPosition}: ${isCompleted ? "Reopen" : "Complete"} ${task.title}`}
+            />
+            <strong className="task-title">{task.title}</strong>
+            {task.status === "In Progress" ? (
+              <span className="task-progress-label">In progress</span>
+            ) : null}
+          </div>
+          {task.notes ? (
+            <span className="task-description"> - {task.notes}</span>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          className="edit-task-button"
+          disabled={disableTaskActions}
+          onClick={() => onEdit(task)}
+          aria-label={`Task ${taskPosition}: Edit task: ${task.title}`}
+          title="Edit task"
+        >
+          ✎
+        </button>
+      </div>
+    );
+  });
 }

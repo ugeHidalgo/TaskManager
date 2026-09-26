@@ -13,6 +13,8 @@ export interface WeekLayoutProps {
   dayContent?: ReactNode[];
   /** Number of day columns to display */
   viewMode?: BoardViewMode;
+  /** Prevent creating/editing tasks while a board mutation is pending */
+  taskActionsDisabled?: boolean;
   onAddTask?: (dayDate: Date | null) => void;
 }
 
@@ -33,6 +35,7 @@ export function WeekLayout({
   weekContent,
   dayContent,
   viewMode = "workweek",
+  taskActionsDisabled = false,
   onAddTask,
 }: WeekLayoutProps) {
   const dayDates = getDayDatesInWeek(weekStart);
@@ -54,6 +57,7 @@ export function WeekLayout({
       <WeekSection
         weekStart={weekStart}
         weekEnd={weekEnd}
+        disabled={taskActionsDisabled}
         onAddTask={() => onAddTask?.(null)}
       >
         {weekContent}
@@ -66,6 +70,7 @@ export function WeekLayout({
             key={`day-${index}`}
             date={date}
             dayName={dayNames[index]}
+            disabled={taskActionsDisabled}
             onAddTask={() => onAddTask?.(date)}
           >
             {dayContent?.[index]}
