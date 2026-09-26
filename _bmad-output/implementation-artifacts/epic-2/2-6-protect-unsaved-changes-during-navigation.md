@@ -1,9 +1,9 @@
-# Story 2.5: Protect Unsaved Changes During Navigation
+# Story 2.6: Protect Unsaved Changes During Navigation
 
 Status: ready-for-dev
 
 Epic: 2 - Task Lifecycle and Completion  
-Story ID: 2.5  
+Story ID: 2.6  
 Estimation: M (2-3 days)  
 Dependencies: Story 2.1 editor and navigation integration completed.
 
@@ -70,7 +70,7 @@ so that I do not accidentally discard in-progress changes.
 
 ## References
 
-- [Source: _bmad-output/planning-artifacts/epics.md#Story 2.5: Protect Unsaved Changes During Navigation]
+- [Source: _bmad-output/planning-artifacts/epics.md#Story 2.6: Protect Unsaved Changes During Navigation]
 - [Source: _bmad-output/planning-artifacts/prds/prd-TaskManager-2026-06-30/prd.md#Edge Case 2: Unsaved Changes]
 - [Source: _bmad-output/planning-artifacts/prds/prd-TaskManager-2026-06-30/FR-7: Unsaved Changes Protection]
 - [Source: _bmad-output/planning-artifacts/ux-designs/ux-TaskManager-2026-07-06/EXPERIENCE.md#Week navigation states]

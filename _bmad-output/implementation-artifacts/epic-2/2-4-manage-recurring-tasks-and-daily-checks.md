@@ -1,9 +1,9 @@
-# Story 2.3: Manage Recurring Tasks and Daily Checks
+# Story 2.4: Manage Recurring Tasks and Daily Checks
 
 Status: ready-for-dev
 
 Epic: 2 - Task Lifecycle and Completion  
-Story ID: 2.3  
+Story ID: 2.4  
 Estimation: M (2-4 days)  
 Dependencies: Story 2.1 task model and board integration completed.
 
@@ -69,7 +69,7 @@ so that I can track habitual responsibilities across the week.
 
 ## References
 
-- [Source: _bmad-output/planning-artifacts/epics.md#Story 2.3: Manage Recurring Tasks and Daily Checks]
+- [Source: _bmad-output/planning-artifacts/epics.md#Story 2.4: Manage Recurring Tasks and Daily Checks]
 - [Source: _bmad-output/planning-artifacts/prds/prd-TaskManager-2026-06-30/prd.md#Phase 2: Board Overview]
 - [Source: _bmad-output/planning-artifacts/prds/prd-TaskManager-2026-06-30/prd.md#FR-4: Recurring Tasks]
 - [Source: _bmad-output/planning-artifacts/architecture.md#Data Architecture]

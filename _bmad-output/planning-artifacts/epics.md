@@ -403,7 +403,43 @@ So that I can keep progress context without losing the ability to reactivate wor
 **Then** completion state is not indicated by color only
 **And** a non-color cue is provided
 
-### Story 2.3: Manage Recurring Tasks and Daily Checks
+### Story 2.3: Add Optional Task Execution Time
+
+As a planner,
+I want to optionally assign an execution time to a task,
+So that tasks with a fixed start time are clearly scheduled while flexible tasks remain without a time.
+
+**Acceptance Criteria:**
+
+**Given** a task has no fixed execution time
+**When** it is created or loaded
+**Then** `ExecutionTime` is persisted and returned as an empty string
+
+**Given** a task has a fixed execution time
+**When** it is created or updated
+**Then** `ExecutionTime` is persisted and returned as an `hh:mm` string
+
+**Given** a task card is rendered
+**When** `ExecutionTime` is non-empty
+**Then** the time appears in the first row immediately before the task title
+
+**Given** a task card is rendered
+**When** the user chooses the clock control
+**Then** a small time-edit popup opens with the current value preselected when one exists
+
+**Given** the time popup is open
+**When** the user selects a time and accepts
+**Then** the new value is persisted and displayed on the task card
+
+**Given** the time popup is open with an existing time
+**When** the user chooses clear time
+**Then** `ExecutionTime` becomes an empty string and the card no longer displays a time
+
+**Given** the time popup is open
+**When** the user cancels without accepting
+**Then** the task and persisted `ExecutionTime` remain unchanged and the popup closes
+
+### Story 2.4: Manage Recurring Tasks and Daily Checks
 
 As a planner,
 I want recurring tasks and per-day completion checks,
@@ -431,7 +467,7 @@ So that I can track habitual responsibilities across the week.
 **Then** recurring items are visually distinguishable from standard tasks
 **And** interaction behavior remains consistent
 
-### Story 2.4: Compute Day and Week Completion Status
+### Story 2.5: Compute Day and Week Completion Status
 
 As a planner,
 I want automatic day and week completion indicators,
@@ -459,7 +495,7 @@ So that I can see closure status at a glance.
 **Then** week completion feedback is not shown as complete
 **And** state remains consistent after reload
 
-### Story 2.5: Protect Unsaved Changes During Navigation
+### Story 2.6: Protect Unsaved Changes During Navigation
 
 As a planner,
 I want warnings before losing unsaved edits,

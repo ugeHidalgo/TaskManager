@@ -1,11 +1,11 @@
-# Story 2.4: Compute Day and Week Completion Status
+# Story 2.5: Compute Day and Week Completion Status
 
 Status: ready-for-dev
 
 Epic: 2 - Task Lifecycle and Completion  
-Story ID: 2.4  
+Story ID: 2.5  
 Estimation: M (2-3 days)  
-Dependencies: Stories 2.1, 2.2, and 2.3 completed.
+Dependencies: Stories 2.1, 2.2, and 2.4 completed.
 
 ---
 
@@ -60,20 +60,20 @@ so that I can see closure status at a glance.
 
 ## Dev Notes
 
-- Use task status as the source for regular-task completion and the Story 2.3 per-day state for recurring checks.
+- Use task status as the source for regular-task completion and the Story 2.4 per-day state for recurring checks.
 - Avoid duplicating completion logic across API and frontend. The frontend may render the authoritative read model and optimistically update only where rollback is defined.
 - Preserve board layout, navigation, view-mode persistence, task visibility, and authentication.
 - Completion indicators must be trustworthy after reload, not derived only from transient component state.
 
 ## References
 
-- [Source: _bmad-output/planning-artifacts/epics.md#Story 2.4: Compute Day and Week Completion Status]
+- [Source: _bmad-output/planning-artifacts/epics.md#Story 2.5: Compute Day and Week Completion Status]
 - [Source: _bmad-output/planning-artifacts/prds/prd-TaskManager-2026-06-30/prd.md#FR-5: Day Completion Tracking]
 - [Source: _bmad-output/planning-artifacts/prds/prd-TaskManager-2026-06-30/prd.md#FR-6: Week Completion Feedback]
 - [Source: _bmad-output/planning-artifacts/architecture.md#Data Architecture]
 - [Source: _bmad-output/planning-artifacts/ux-designs/ux-TaskManager-2026-07-06/EXPERIENCE.md#Weekly board structure]
 - [Source: _bmad-output/implementation-artifacts/epic-2/2-2-keep-completed-tasks-visible-and-reopenable.md]
-- [Source: _bmad-output/implementation-artifacts/epic-2/2-3-manage-recurring-tasks-and-daily-checks.md]
+- [Source: _bmad-output/implementation-artifacts/epic-2/2-4-manage-recurring-tasks-and-daily-checks.md]
 
 ## Definition of Done
 

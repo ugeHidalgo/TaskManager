@@ -108,7 +108,7 @@ so that I can organize planned work with the right temporal scope.
 - The task title and completion control relationship must remain ready for Story 2.2; do not bury the title in a large editor-only representation.
 - Shared-week section remains above day columns. In full-week mode, Sunday and Saturday columns must receive only tasks assigned to those dates; shared-week tasks remain unchanged.
 - Save, validation, and API errors should be announced accessibly and should not rely on color alone.
-- Do not silently discard an in-progress draft when a save fails. Unsaved-change navigation protection is explicitly deferred to Story 2.5.
+- Do not silently discard an in-progress draft when a save fails. Unsaved-change navigation protection is explicitly deferred to Story 2.6.
 
 ## Project Structure Notes
 
