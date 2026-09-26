@@ -1,6 +1,6 @@
 # Story 2.2: Keep Completed Tasks Visible and Reopenable
 
-Status: done
+Status: in-progress
 
 Epic: 2 - Task Lifecycle and Completion  
 Story ID: 2.2  
@@ -18,11 +18,15 @@ so that I can keep progress context without losing the ability to reactivate wor
 ## Acceptance Criteria
 
 1. Given an active task, when the user marks it completed, then the task remains in the same board section and position context, and its completion state is persisted.
-2. Given a completed task, when it is rendered, then it uses the minimized gray presentation while keeping its title and essential controls visible.
+2. Given a completed task, when it is rendered, then it uses the minimized gray presentation, keeps only the first and second rows visible, hides the description row, and displays the title with strikethrough while keeping essential controls visible.
 3. Given a completed task, when the user chooses reopen, then it returns to the active presentation and the reopened state is persisted.
 4. Given the board reloads or the user returns to the same week, when data is loaded, then completed tasks remain visible and reopenable.
 5. Given accessibility mode, when completion state is rendered, then it is communicated with a non-color cue and accessible control name.
 6. Given a completion request fails, when the API returns an error, then the UI rolls back to the previous state and exposes a non-sensitive actionable error.
+7. Given a task card is rendered, when its layout is displayed, then the title appears alone in the first row, the checkbox, status, and edit control appear together in the second row, and the description appears in a third row when present.
+8. Given a task has `In Progress` status, when its card is rendered, then its status label appears alongside the checkbox and edit control in the second row.
+9. Given a task is `Not Started` or `Completed`, when its card is rendered, then no `In Progress` label is shown and the current card presentation remains intact.
+10. Given a task is completed, when its card is rendered, then only the title row and controls/status row remain visible, its optional description is hidden, and its title uses strikethrough styling.
 
 ## Tasks / Subtasks
 
@@ -45,6 +49,15 @@ so that I can keep progress context without losing the ability to reactivate wor
 - [x] Test that completed tasks remain in their original section and position context.
 - [x] Test non-color completion cues and accessible labels.
 - [x] Run focused frontend/backend tests, lint, and builds.
+
+### Task 4 - Reorganize task card into three rows
+
+- [ ] Put the task title by itself in the first row.
+- [ ] Put the completion checkbox, status label (when status is `In Progress`), and edit button together in the second row.
+- [ ] Put the optional description/notes in a third row.
+- [ ] For completed tasks, hide the third-row description and strike through the title while retaining rows one and two.
+- [ ] Preserve completed-card compact styling, keyboard access, and workweek/full-week layouts.
+- [ ] Add frontend regression tests for the three-row structure, status-label visibility, and completed-task row/title presentation.
 
 ## Scope Boundaries
 
@@ -74,6 +87,7 @@ so that I can keep progress context without losing the ability to reactivate wor
 - [x] Completion state has a non-color accessible cue.
 - [x] Failed updates roll back without losing the prior task state.
 - [x] Focused tests and quality gates pass.
+- [ ] Task cards use the requested three-row layout; completed cards show only the first two rows and strike through the title.
 
 ## Dev Agent Record
 
@@ -90,6 +104,7 @@ so that I can keep progress context without losing the ability to reactivate wor
 - Existing `In Progress` tasks retain a visible textual status cue; controls use distinct board-position-prefixed accessible names.
 - Board task controls remain disabled during status persistence or editor saves, preventing overlapping updates from applying stale results.
 - Validation: 23 focused frontend tests passed; ESLint, the frontend production build, and `git diff --check` passed.
+- Reopened the story to reorganize task cards: title first, checkbox/status/edit controls second, and description third.
 
 ### File List
 
