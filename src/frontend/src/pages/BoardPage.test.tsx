@@ -255,7 +255,7 @@ describe("BoardPage week navigation", () => {
     ).not.toBeChecked();
   });
 
-  it("completes and reopens a task with the keyboard and persists each status", async () => {
+  it("cycles task status with the keyboard and persists each status", async () => {
     const user = userEvent.setup();
     const task = makeTask("keyboard-task", "Keyboard task", null);
     let storedTasks = [task];
@@ -289,28 +289,41 @@ describe("BoardPage week navigation", () => {
     );
 
     const completionCheckbox = await screen.findByRole("checkbox", {
-      name: "Task 1: Complete Keyboard task",
+      name: "Task 1: Start Keyboard task",
     });
     completionCheckbox.focus();
     expect(completionCheckbox).toHaveFocus();
     await user.keyboard(" ");
 
-    const reopenCheckbox = await screen.findByRole("checkbox", {
-      name: "Task 1: Reopen Keyboard task",
-    });
-    await waitFor(() => expect(reopenCheckbox).toBeChecked());
-    expect(screen.getByRole("status")).toHaveTextContent("Task completed.");
-    expect(savedStatuses).toEqual(["Completed"]);
-
-    reopenCheckbox.focus();
-    await user.keyboard(" ");
-
-    const completedCheckbox = await screen.findByRole("checkbox", {
+    const inProgressCheckbox = await screen.findByRole("checkbox", {
       name: "Task 1: Complete Keyboard task",
     });
-    await waitFor(() => expect(completedCheckbox).not.toBeChecked());
+    await waitFor(() => expect(inProgressCheckbox).not.toBeChecked());
+    expect(screen.getByRole("status")).toHaveTextContent("Task started.");
+    expect(screen.getByRole("status")).toHaveClass(
+      "save-message-status-change",
+    );
+    expect(savedStatuses).toEqual(["In Progress"]);
+
+    inProgressCheckbox.focus();
+    await user.keyboard(" ");
+
+    const completedTaskCheckbox = await screen.findByRole("checkbox", {
+      name: "Task 1: Reopen Keyboard task",
+    });
+    await waitFor(() => expect(completedTaskCheckbox).toBeChecked());
+    expect(screen.getByRole("status")).toHaveTextContent("Task completed.");
+    expect(savedStatuses).toEqual(["In Progress", "Completed"]);
+
+    completedTaskCheckbox.focus();
+    await user.keyboard(" ");
+
+    const reopenedCheckbox = await screen.findByRole("checkbox", {
+      name: "Task 1: Start Keyboard task",
+    });
+    await waitFor(() => expect(reopenedCheckbox).not.toBeChecked());
     expect(screen.getByRole("status")).toHaveTextContent("Task reopened.");
-    expect(savedStatuses).toEqual(["Completed", "Not Started"]);
+    expect(savedStatuses).toEqual(["In Progress", "Completed", "Not Started"]);
     expect(storedTasks[0].status).toBe("Not Started");
   });
 
@@ -350,7 +363,7 @@ describe("BoardPage week navigation", () => {
     );
 
     const completionCheckbox = await screen.findByRole("checkbox", {
-      name: "Task 1: Complete Pending task",
+      name: "Task 1: Start Pending task",
     });
     await user.click(completionCheckbox);
 
@@ -376,8 +389,8 @@ describe("BoardPage week navigation", () => {
 
     expect(
       await screen.findByRole("checkbox", {
-        name: "Task 1: Reopen Pending task",
-        checked: true,
+        name: "Task 1: Complete Pending task",
+        checked: false,
       }),
     ).toBeEnabled();
     expect(
@@ -428,6 +441,153 @@ describe("BoardPage week navigation", () => {
     expect(reopenCheckbox).toBeVisible();
   });
 
+  it("renders task cards in three rows and minimizes completed cards", async () => {
+    const tasks = [
+      {
+        ...makeTask(
+          "in-progress-task",
+          "In progress title",
+          null,
+          "In Progress",
+        ),
+        notes: "In progress notes",
+      },
+      {
+        ...makeTask("not-started-task", "Not started title", null),
+        notes: "Not started notes",
+      },
+      {
+        ...makeTask("completed-task", "Completed title", null, "Completed"),
+        notes: "Completed notes",
+      },
+    ];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      buildBoardResponseFromUrl(String(input), tasks),
+    );
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    const inProgressCard = (
+      await screen.findByText("In progress title")
+    ).closest(".task-item") as HTMLElement;
+    const inProgressRows = inProgressCard.querySelectorAll(
+      ".task-title-row, .task-controls-row, .task-description",
+    );
+    expect(inProgressRows).toHaveLength(3);
+    expect(inProgressRows[0]).toHaveTextContent("In progress title");
+    expect(inProgressRows[0].querySelector(".task-progress-label")).toBeNull();
+    expect(inProgressRows[1]).toHaveTextContent("In progress");
+    expect(inProgressRows[2]).toHaveTextContent("In progress notes");
+    expect(
+      Array.from(inProgressRows[1].children).map((child) => child.className),
+    ).toEqual([
+      "task-completion-checkbox",
+      "edit-task-button",
+      "delete-task-button",
+      "task-progress-label",
+    ]);
+    expect(
+      within(inProgressRows[1] as HTMLElement).getByRole("checkbox"),
+    ).toBeInTheDocument();
+    expect(
+      within(inProgressRows[1] as HTMLElement).getAllByRole("button"),
+    ).toHaveLength(2);
+
+    const notStartedCard = screen
+      .getByText("Not started title")
+      .closest(".task-item") as HTMLElement;
+    const notStartedControls = notStartedCard.querySelector(
+      ".task-controls-row",
+    ) as HTMLElement;
+    expect(notStartedControls).toHaveTextContent("Not Started");
+    expect(
+      Array.from(notStartedControls.children).map((child) => child.className),
+    ).toEqual([
+      "task-completion-checkbox",
+      "edit-task-button",
+      "delete-task-button",
+      "task-not-started-label",
+    ]);
+    expect(notStartedCard.querySelector(".task-progress-label")).toBeNull();
+
+    const completedCard = screen
+      .getByText("Completed title")
+      .closest(".task-item") as HTMLElement;
+    expect(completedCard).toHaveClass("task-item-completed");
+    expect(
+      completedCard.querySelectorAll(".task-title-row, .task-controls-row"),
+    ).toHaveLength(2);
+    expect(completedCard.querySelector(".task-description")).toBeNull();
+    expect(
+      completedCard.querySelector(
+        ".task-progress-label, .task-not-started-label",
+      ),
+    ).toBeNull();
+    expect(completedCard.querySelector(".task-title")).toHaveClass(
+      "task-title-completed",
+    );
+    expect(
+      within(completedCard).getByRole("checkbox", {
+        name: "Task 3: Reopen Completed title",
+      }),
+    ).toBeVisible();
+    expect(
+      within(completedCard).getByRole("button", {
+        name: "Task 3: Edit task: Completed title",
+      }),
+    ).toBeVisible();
+    expect(
+      within(completedCard).getByRole("button", {
+        name: "Task 3: Delete task: Completed title",
+      }),
+    ).toBeVisible();
+  });
+
+  it("cancels or confirms permanent task deletion", async () => {
+    const user = userEvent.setup();
+    const task = makeTask("delete-task", "Task to delete", null, "Not Started");
+    const confirmMock = vi
+      .spyOn(window, "confirm")
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input, init) => {
+        if (init?.method === "DELETE") {
+          return new Response(null, { status: 204 });
+        }
+
+        return buildBoardResponseFromUrl(String(input), [task]);
+      });
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    const deleteButton = await screen.findByRole("button", {
+      name: "Task 1: Delete task: Task to delete",
+    });
+    expect(deleteButton).toHaveTextContent("✕");
+    await user.click(deleteButton);
+    expect(screen.getByText("Task to delete")).toBeInTheDocument();
+
+    await user.click(deleteButton);
+    await waitFor(() =>
+      expect(screen.queryByText("Task to delete")).not.toBeInTheDocument(),
+    );
+    expect(confirmMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/tasks/delete-task?weekStartDate="),
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
   it("distinguishes accessible controls for tasks with duplicate titles", async () => {
     const firstTask = makeTask("task-1", "Duplicate title", null);
     const secondTask = makeTask("task-2", "Duplicate title", null);
@@ -443,12 +603,12 @@ describe("BoardPage week navigation", () => {
 
     expect(
       await screen.findByRole("checkbox", {
-        name: "Task 1: Complete Duplicate title",
+        name: "Task 1: Start Duplicate title",
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("checkbox", {
-        name: "Task 2: Complete Duplicate title",
+        name: "Task 2: Start Duplicate title",
       }),
     ).toBeInTheDocument();
   });
@@ -506,15 +666,15 @@ describe("BoardPage week navigation", () => {
 
     await user.click(
       screen.getByRole("checkbox", {
-        name: "Task 2: Complete Shared second",
+        name: "Task 2: Start Shared second",
       }),
     );
     await waitFor(() =>
       expect(
         screen.getByRole("checkbox", {
-          name: "Task 2: Reopen Shared second",
+          name: "Task 2: Complete Shared second",
         }),
-      ).toBeChecked(),
+      ).not.toBeChecked(),
     );
     await user.selectOptions(
       screen.getByRole("combobox", { name: "View" }),
@@ -535,9 +695,9 @@ describe("BoardPage week navigation", () => {
     expect(await screen.findByText("Sunday completed")).toBeVisible();
     expect(
       screen.getByRole("checkbox", {
-        name: "Task 2: Reopen Shared second",
+        name: "Task 2: Complete Shared second",
       }),
-    ).toBeChecked();
+    ).not.toBeChecked();
     expect(
       screen.getByText("Monday completed").closest(".day-column"),
     ).toHaveTextContent("Monday completed");

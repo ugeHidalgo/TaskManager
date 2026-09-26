@@ -194,6 +194,14 @@ app.MapPut("/api/v1/tasks/{taskId:guid}", [Authorize] (
     CancellationToken cancellationToken) =>
     facade.UpdateTaskAsync(taskId, httpContext, request, dbContext, cancellationToken));
 
+app.MapDelete("/api/v1/tasks/{taskId:guid}", [Authorize] (
+    Guid taskId,
+    HttpContext httpContext,
+    TaskManagerFacade facade,
+    TaskManagerDbContext dbContext,
+    CancellationToken cancellationToken) =>
+    facade.DeleteTaskAsync(taskId, httpContext, dbContext, cancellationToken));
+
 app.Run();
 
 public partial class Program;

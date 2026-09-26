@@ -135,6 +135,66 @@ public sealed class TaskAuthorizationTests : IClassFixture<WebApplicationFactory
         }
     }
 
+    [Fact]
+    public async Task DeleteTask_ReturnsUnauthorizedEnvelopeWithoutToken()
+    {
+        DateOnly weekStartDate;
+        Guid taskId;
+
+        await using (var seedScope = factory.Services.CreateAsyncScope())
+        {
+            var dbContext = seedScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            do
+            {
+                weekStartDate = GetRandomWeekStartDate();
+            }
+            while (await dbContext.WeekWorkspaces.AnyAsync(workspace => workspace.WeekStartDate == weekStartDate));
+
+            var workspace = WeekWorkspace.Create(weekStartDate);
+            var task = TaskItem.Create(workspace.Id, weekStartDate, "Protected delete task");
+            taskId = task.Id;
+            dbContext.WeekWorkspaces.Add(workspace);
+            dbContext.Tasks.Add(task);
+            await dbContext.SaveChangesAsync();
+        }
+
+        try
+        {
+            using var client = factory.CreateClient();
+            var response = await client.DeleteAsync(
+                $"/api/v1/tasks/{taskId}?weekStartDate={weekStartDate:yyyy-MM-dd}");
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(
+                "auth.unauthorized",
+                body.RootElement.GetProperty("error").GetProperty("code").GetString());
+
+            await using var verificationScope = factory.Services.CreateAsyncScope();
+            var verificationContext = verificationScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            Assert.NotNull(await verificationContext.Tasks.SingleOrDefaultAsync(task => task.Id == taskId));
+        }
+        finally
+        {
+            await using var cleanupScope = factory.Services.CreateAsyncScope();
+            var cleanupContext = cleanupScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            var seededTask = await cleanupContext.Tasks.SingleOrDefaultAsync(task => task.Id == taskId);
+            if (seededTask is not null)
+            {
+                cleanupContext.Tasks.Remove(seededTask);
+            }
+
+            var seededWorkspace = await cleanupContext.WeekWorkspaces
+                .SingleOrDefaultAsync(workspace => workspace.WeekStartDate == weekStartDate);
+            if (seededWorkspace is not null)
+            {
+                cleanupContext.WeekWorkspaces.Remove(seededWorkspace);
+            }
+
+            await cleanupContext.SaveChangesAsync();
+        }
+    }
+
     private static DateOnly GetRandomWeekStartDate()
     {
         var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(Random.Shared.Next(365, 36500)));

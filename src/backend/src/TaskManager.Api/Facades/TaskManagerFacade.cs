@@ -210,6 +210,34 @@ public sealed class TaskManagerFacade
         }
     }
 
+    public async Task<IResult> DeleteTaskAsync(
+        Guid taskId,
+        HttpContext httpContext,
+        TaskManagerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var weekStartDate = ResolveWeekStartDate(httpContext, "weekStartDate");
+        var workspace = await dbContext.WeekWorkspaces
+            .SingleOrDefaultAsync(candidate => candidate.WeekStartDate == weekStartDate, cancellationToken);
+        var task = workspace is null
+            ? null
+            : await dbContext.Tasks.SingleOrDefaultAsync(
+                candidate => candidate.Id == taskId && candidate.WeekWorkspaceId == workspace.Id,
+                cancellationToken);
+
+        if (task is null)
+        {
+            return Results.NotFound(ApiErrorResponse.Create(
+                code: "task.not_found",
+                message: "Task was not found in the selected week.",
+                requestId: httpContext.TraceIdentifier));
+        }
+
+        dbContext.Tasks.Remove(task);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Results.NoContent();
+    }
+
     private static async Task<WeekWorkspace> GetOrCreateWorkspaceAsync(
         TaskManagerDbContext dbContext,
         DateOnly weekStartDate,

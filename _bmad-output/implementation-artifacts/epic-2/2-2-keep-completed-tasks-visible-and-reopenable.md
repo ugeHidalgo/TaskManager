@@ -27,6 +27,7 @@ so that I can keep progress context without losing the ability to reactivate wor
 8. Given a task has `In Progress` status, when its card is rendered, then its status label appears alongside the checkbox and edit control in the second row.
 9. Given a task is `Not Started` or `Completed`, when its card is rendered, then no `In Progress` label is shown and the current card presentation remains intact.
 10. Given a task is completed, when its card is rendered, then only the title row and controls/status row remain visible, its optional description is hidden, and its title uses strikethrough styling.
+11. Given a task card is rendered, when the user chooses permanent deletion, then a confirmation popup appears; confirming removes the task from the database and board, while cancelling leaves the task unchanged and closes the popup.
 
 ## Tasks / Subtasks
 
@@ -52,16 +53,33 @@ so that I can keep progress context without losing the ability to reactivate wor
 
 ### Task 4 - Reorganize task card into three rows
 
-- [ ] Put the task title by itself in the first row.
-- [ ] Put the completion checkbox, status label (when status is `In Progress`), and edit button together in the second row.
-- [ ] Put the optional description/notes in a third row.
-- [ ] For completed tasks, hide the third-row description and strike through the title while retaining rows one and two.
-- [ ] Preserve completed-card compact styling, keyboard access, and workweek/full-week layouts.
-- [ ] Add frontend regression tests for the three-row structure, status-label visibility, and completed-task row/title presentation.
+- [x] Put the task title by itself in the first row.
+- [x] Put the completion checkbox, status label (when status is `In Progress`), and edit button together in the second row.
+- [x] Put the optional description/notes in a third row.
+- [x] For completed tasks, hide the third-row description and strike through the title while retaining rows one and two.
+- [x] Preserve completed-card compact styling, keyboard access, and workweek/full-week layouts.
+- [x] Add frontend regression tests for the three-row structure, status-label visibility, and completed-task row/title presentation.
+
+### Task 5 - US2-2 interaction and status refinements
+
+- [x] Cycle checkbox state through `Not Started`, `In Progress`, and `Completed`, marking the checkbox only for `Completed`.
+- [x] Show the `Not Started` status label in blue and keep `Completed` without a status label.
+- [x] Keep the edit control icon-only with a transparent background and no visible border at rest.
+- [x] Show the edit control border on pointer hover and keyboard focus without losing accessible focus indication.
+- [x] Blink the status-change message for 10 seconds, keep it static for 5 seconds, and then remove it.
+- [x] Validate the refinements with focused frontend tests, lint, production build, and Docker frontend rebuild.
+
+### Task 6 - Permanent task deletion
+
+- [x] Add an authenticated `DELETE` task endpoint scoped to the selected week workspace.
+- [x] Add an icon-only `X` delete button beside the edit button with accessible naming and keyboard focus styling.
+- [x] Show a confirmation popup before deletion; cancel keeps the task in place and closes the popup.
+- [x] Remove the task from persistence and the board only after confirmation succeeds.
+- [x] Add frontend and backend regression coverage for confirmation, cancellation, persistence, week scoping, and authorization.
 
 ## Scope Boundaries
 
-- Do not implement recurring-task daily checks, day/week completion calculations, delete confirmation, reorder, or unsaved-change protection.
+- Do not implement recurring-task daily checks, day/week completion calculations, reorder, or unsaved-change protection.
 - Do not remove completed tasks from API responses or board lists.
 
 ## Dev Notes
@@ -87,7 +105,8 @@ so that I can keep progress context without losing the ability to reactivate wor
 - [x] Completion state has a non-color accessible cue.
 - [x] Failed updates roll back without losing the prior task state.
 - [x] Focused tests and quality gates pass.
-- [ ] Task cards use the requested three-row layout; completed cards show only the first two rows and strike through the title.
+- [x] Task cards use the requested three-row layout; completed cards show only the first two rows and strike through the title.
+- [x] Tasks can be permanently deleted after explicit confirmation, with cancellation preserving the task.
 
 ## Dev Agent Record
 
@@ -105,6 +124,7 @@ so that I can keep progress context without losing the ability to reactivate wor
 - Board task controls remain disabled during status persistence or editor saves, preventing overlapping updates from applying stale results.
 - Validation: 23 focused frontend tests passed; ESLint, the frontend production build, and `git diff --check` passed.
 - Reopened the story to reorganize task cards: title first, checkbox/status/edit controls second, and description third.
+- Added permanent deletion with week-scoped authenticated API, confirmation popup, cancellation preservation, and frontend/backend regression coverage.
 
 ### File List
 
@@ -116,3 +136,8 @@ so that I can keep progress context without losing the ability to reactivate wor
 - `src/frontend/src/features/board/components/DayColumn.tsx`
 - `src/frontend/src/features/board/styles/board-layout.css`
 - `src/frontend/src/pages/BoardPage.test.tsx`
+- `src/frontend/src/api/board.ts`
+- `src/backend/src/TaskManager.Api/Program.cs`
+- `src/backend/src/TaskManager.Api/Facades/TaskManagerFacade.cs`
+- `src/backend/tests/TaskApiTests.cs`
+- `src/backend/tests/TaskAuthorizationTests.cs`

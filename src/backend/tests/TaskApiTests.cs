@@ -208,6 +208,45 @@ public sealed class TaskApiTests
         Assert.Equal("task.not_found", response.Body.RootElement.GetProperty("Error").GetProperty("Code").GetString());
     }
 
+    [Fact]
+    public async Task DeleteTaskAsync_RemovesTaskFromSelectedWeek()
+    {
+        var weekStartDate = new DateOnly(2026, 8, 17);
+        await using var dbContext = CreateDbContext();
+        var workspace = TaskManager.Domain.Board.WeekWorkspace.Create(weekStartDate);
+        var task = TaskManager.Domain.Board.TaskItem.Create(workspace.Id, weekStartDate, "Delete me");
+        dbContext.WeekWorkspaces.Add(workspace);
+        dbContext.Tasks.Add(task);
+        await dbContext.SaveChangesAsync();
+
+        var context = CreateContext();
+        context.Request.QueryString = new QueryString("?weekStartDate=2026-08-17");
+        var result = await facade.DeleteTaskAsync(task.Id, context, dbContext, CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status204NoContent, (result as IStatusCodeHttpResult)?.StatusCode);
+        Assert.Null(await dbContext.Tasks.SingleOrDefaultAsync(candidate => candidate.Id == task.Id));
+    }
+
+    [Fact]
+    public async Task DeleteTaskAsync_ReturnsNotFound_WhenTaskIsOutsideSelectedWeek()
+    {
+        await using var dbContext = CreateDbContext();
+        var workspace = TaskManager.Domain.Board.WeekWorkspace.Create(new DateOnly(2026, 8, 17));
+        var task = TaskManager.Domain.Board.TaskItem.Create(workspace.Id, workspace.WeekStartDate, "Keep me");
+        dbContext.WeekWorkspaces.Add(workspace);
+        dbContext.Tasks.Add(task);
+        await dbContext.SaveChangesAsync();
+
+        var context = CreateContext();
+        context.Request.QueryString = new QueryString("?weekStartDate=2026-08-24");
+        var result = await facade.DeleteTaskAsync(task.Id, context, dbContext, CancellationToken.None);
+        var response = ToResponse(result);
+
+        Assert.Equal(StatusCodes.Status404NotFound, response.StatusCode);
+        Assert.Equal("task.not_found", response.Body.RootElement.GetProperty("Error").GetProperty("Code").GetString());
+        Assert.NotNull(await dbContext.Tasks.SingleOrDefaultAsync(candidate => candidate.Id == task.Id));
+    }
+
     private static DefaultHttpContext CreateContext()
     {
         return new DefaultHttpContext

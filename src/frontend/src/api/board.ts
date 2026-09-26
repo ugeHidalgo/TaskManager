@@ -164,3 +164,32 @@ export function updateTask(
     input,
   );
 }
+
+export async function deleteTask(
+  token: string,
+  taskId: string,
+  weekStartDate: string,
+): Promise<void> {
+  const url = `${apiBaseUrl}/tasks/${encodeURIComponent(taskId)}?weekStartDate=${encodeURIComponent(weekStartDate)}`;
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    let message = "Could not delete the task.";
+
+    try {
+      const body = (await response.json()) as ApiError;
+      if (body.error?.message) {
+        message = body.error.message;
+      }
+    } catch {
+      // Keep fallback message when response is not JSON.
+    }
+
+    throw new Error(message);
+  }
+}

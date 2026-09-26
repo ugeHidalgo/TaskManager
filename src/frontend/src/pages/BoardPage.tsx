@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   formatDateOnly,
   createTask,
+  deleteTask,
   getBoardForWeek,
   getTasksForWeek,
   updateTask,
@@ -23,6 +24,7 @@ import {
 import { getToken } from "../lib/session";
 
 const BOARD_VIEW_MODE_KEY = "taskmanager.boardViewMode";
+type StatusMessagePhase = "blinking" | "static" | null;
 
 function getInitialBoardViewMode(): BoardViewMode {
   const storedMode = window.localStorage.getItem(BOARD_VIEW_MODE_KEY);
@@ -41,6 +43,9 @@ export function BoardPage() {
   const [pendingStatusTaskIds, setPendingStatusTaskIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [pendingDeleteTaskIds, setPendingDeleteTaskIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [loadedWeekStartDate, setLoadedWeekStartDate] = useState<string | null>(
     null,
   );
@@ -50,9 +55,33 @@ export function BoardPage() {
   const [editorError, setEditorError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [statusMessagePhase, setStatusMessagePhase] =
+    useState<StatusMessagePhase>(null);
   const { weekStart, weekEnd } = useWeekCalculation(selectedDate);
   const weekStartDateParam = formatDateOnly(weekStart);
   const weekDisplay = formatWeekDisplay(weekStart, weekEnd);
+
+  useEffect(() => {
+    if (statusMessagePhase === "blinking") {
+      const timeoutId = window.setTimeout(
+        () => setStatusMessagePhase("static"),
+        10_000,
+      );
+
+      return () => window.clearTimeout(timeoutId);
+    }
+
+    if (statusMessagePhase === "static") {
+      const timeoutId = window.setTimeout(() => {
+        setSaveMessage(null);
+        setStatusMessagePhase(null);
+      }, 5_000);
+
+      return () => window.clearTimeout(timeoutId);
+    }
+
+    return undefined;
+  }, [statusMessagePhase]);
 
   useEffect(() => {
     if (!token) {
@@ -96,7 +125,10 @@ export function BoardPage() {
 
   const visibleTasks = loadedWeekStartDate === weekStartDateParam ? tasks : [];
   const disableTaskActions =
-    isEditorOpen || isSaving || pendingStatusTaskIds.size > 0;
+    isEditorOpen ||
+    isSaving ||
+    pendingStatusTaskIds.size > 0 ||
+    pendingDeleteTaskIds.size > 0;
   const taskAccessiblePositions = new Map(
     visibleTasks.map((task, index) => [task.id, index + 1]),
   );
@@ -122,6 +154,7 @@ export function BoardPage() {
     setEditorDayDate(dayDate);
     setEditorError(null);
     setSaveMessage(null);
+    setStatusMessagePhase(null);
   }
 
   async function handleTaskSave(input: SaveTaskInput) {
@@ -144,6 +177,7 @@ export function BoardPage() {
       setIsEditorOpen(false);
       setEditorTask(undefined);
       setSaveMessage(editorTask ? "Task updated." : "Task created.");
+      setStatusMessagePhase(null);
     } catch (error) {
       setEditorError(
         error instanceof Error ? error.message : "Could not save the task.",
@@ -158,8 +192,7 @@ export function BoardPage() {
       return;
     }
 
-    const nextStatus =
-      task.status === "Completed" ? "Not Started" : "Completed";
+    const nextStatus = getNextTaskStatus(task.status);
     setPendingStatusTaskIds((current) => new Set(current).add(task.id));
     try {
       await updateTask(token, task.id, {
@@ -177,9 +210,15 @@ export function BoardPage() {
         ),
       );
       setSaveMessage(
-        nextStatus === "Completed" ? "Task completed." : "Task reopened.",
+        nextStatus === "Completed"
+          ? "Task completed."
+          : nextStatus === "In Progress"
+            ? "Task started."
+            : "Task reopened.",
       );
+      setStatusMessagePhase("blinking");
     } catch (error) {
+      setStatusMessagePhase(null);
       setSaveMessage(
         error instanceof Error
           ? error.message
@@ -187,6 +226,35 @@ export function BoardPage() {
       );
     } finally {
       setPendingStatusTaskIds((current) => {
+        const next = new Set(current);
+        next.delete(task.id);
+        return next;
+      });
+    }
+  }
+
+  async function handleTaskDelete(task: TaskPayload) {
+    if (!token || !window.confirm(`Delete task "${task.title}" permanently?`)) {
+      return;
+    }
+
+    setPendingDeleteTaskIds((current) => new Set(current).add(task.id));
+    try {
+      await deleteTask(token, task.id, weekStartDateParam);
+      setTasks((currentTasks) =>
+        currentTasks.filter((currentTask) => currentTask.id !== task.id),
+      );
+      setSaveMessage("Task deleted.");
+      setStatusMessagePhase(null);
+    } catch (error) {
+      setSaveMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not delete the task. Please try again.",
+      );
+      setStatusMessagePhase(null);
+    } finally {
+      setPendingDeleteTaskIds((current) => {
         const next = new Set(current);
         next.delete(task.id);
         return next;
@@ -259,7 +327,11 @@ export function BoardPage() {
       </header>
 
       {saveMessage ? (
-        <p className="save-message" role="status" aria-live="polite">
+        <p
+          className={`save-message${statusMessagePhase === "blinking" ? " save-message-status-change" : ""}`}
+          role="status"
+          aria-live="polite"
+        >
           {saveMessage}
         </p>
       ) : null}
@@ -274,7 +346,9 @@ export function BoardPage() {
           visibleTasks.filter((task) => task.dayDate === null),
           (task) => openTaskEditor(null, task),
           handleTaskStatusToggle,
+          handleTaskDelete,
           pendingStatusTaskIds,
+          pendingDeleteTaskIds,
           taskAccessiblePositions,
           disableTaskActions,
         )}
@@ -285,7 +359,9 @@ export function BoardPage() {
             visibleTasks.filter((task) => task.dayDate === dayDate),
             (task) => openTaskEditor(new Date(`${dayDate}T00:00:00`), task),
             handleTaskStatusToggle,
+            handleTaskDelete,
             pendingStatusTaskIds,
+            pendingDeleteTaskIds,
             taskAccessiblePositions,
             disableTaskActions,
           );
@@ -314,7 +390,9 @@ function renderTasks(
   tasks: TaskPayload[],
   onEdit: (task: TaskPayload) => void,
   onStatusToggle: (task: TaskPayload) => void,
+  onDelete: (task: TaskPayload) => void,
   pendingStatusTaskIds: ReadonlySet<string>,
+  pendingDeleteTaskIds: ReadonlySet<string>,
   taskAccessiblePositions: ReadonlyMap<string, number>,
   disableTaskActions: boolean,
 ) {
@@ -324,45 +402,92 @@ function renderTasks(
 
   return tasks.map((task) => {
     const isCompleted = task.status === "Completed";
+    const nextStatus = getNextTaskStatus(task.status);
     const isUpdatingStatus = pendingStatusTaskIds.has(task.id);
+    const isDeleting = pendingDeleteTaskIds.has(task.id);
     const taskPosition = taskAccessiblePositions.get(task.id) ?? 1;
 
     return (
       <div
         key={task.id}
         className={`task-item${isCompleted ? " task-item-completed" : ""}`}
-        aria-busy={isUpdatingStatus}
+        aria-busy={isUpdatingStatus || isDeleting}
       >
-        <div>
+        <div className="task-content">
           <div className="task-title-row">
+            <strong
+              className={`task-title${isCompleted ? " task-title-completed" : ""}`}
+            >
+              {task.title}
+            </strong>
+          </div>
+          <div className="task-controls-row">
             <input
               type="checkbox"
               className="task-completion-checkbox"
               checked={isCompleted}
               disabled={disableTaskActions}
               onChange={() => void onStatusToggle(task)}
-              aria-label={`Task ${taskPosition}: ${isCompleted ? "Reopen" : "Complete"} ${task.title}`}
+              aria-label={`Task ${taskPosition}: ${getTaskStatusAction(nextStatus)} ${task.title}`}
             />
-            <strong className="task-title">{task.title}</strong>
+            <button
+              type="button"
+              className="edit-task-button"
+              disabled={disableTaskActions}
+              onClick={() => onEdit(task)}
+              aria-label={`Task ${taskPosition}: Edit task: ${task.title}`}
+              title="Edit task"
+            >
+              ✎
+            </button>
+            <button
+              type="button"
+              className="delete-task-button"
+              disabled={disableTaskActions}
+              onClick={() => void onDelete(task)}
+              aria-label={`Task ${taskPosition}: Delete task: ${task.title}`}
+              title="Delete task"
+            >
+              ✕
+            </button>
             {task.status === "In Progress" ? (
               <span className="task-progress-label">In progress</span>
             ) : null}
+            {task.status === "Not Started" ? (
+              <span className="task-not-started-label">Not Started</span>
+            ) : null}
           </div>
-          {task.notes ? (
-            <span className="task-description"> - {task.notes}</span>
+          {!isCompleted && task.notes ? (
+            <div className="task-description">{task.notes}</div>
           ) : null}
         </div>
-        <button
-          type="button"
-          className="edit-task-button"
-          disabled={disableTaskActions}
-          onClick={() => onEdit(task)}
-          aria-label={`Task ${taskPosition}: Edit task: ${task.title}`}
-          title="Edit task"
-        >
-          ✎
-        </button>
       </div>
     );
   });
+}
+
+function getNextTaskStatus(
+  status: TaskPayload["status"],
+): TaskPayload["status"] {
+  if (status === "Completed") {
+    return "Not Started";
+  }
+
+  if (status === "Not Started") {
+    return "In Progress";
+  }
+
+  return "Completed";
+}
+
+function getTaskStatusAction(status: TaskPayload["status"]): string {
+  if (status === "Completed") {
+    return "Complete";
+  }
+
+  if (status === "In Progress") {
+    return "Start";
+  }
+
+  return "Reopen";
 }
