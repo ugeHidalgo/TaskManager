@@ -1,6 +1,6 @@
 # Story 2.2: Keep Completed Tasks Visible and Reopenable
 
-Status: ready-for-dev
+Status: in-progress
 
 Epic: 2 - Task Lifecycle and Completion  
 Story ID: 2.2  
@@ -28,9 +28,9 @@ so that I can keep progress context without losing the ability to reactivate wor
 
 ### Task 1 - Completion state integration
 
-- [ ] Extend the task status model and API update flow from Story 2.1.
-- [ ] Add an authenticated completion/reopen operation or use the established task update contract consistently.
-- [ ] Persist status without changing task placement or order context.
+- [x] Extend the task status model and API update flow from Story 2.1.
+- [x] Add an authenticated completion/reopen operation or use the established task update contract consistently.
+- [x] Persist status without changing task placement or order context.
 
 ### Task 2 - Board presentation and interaction
 
@@ -83,4 +83,10 @@ so that I can keep progress context without losing the ability to reactivate wor
 
 ### Completion Notes List
 
+- Reused Story 2.1's authenticated task update contract; no new endpoint or persistence schema was needed.
+- Added regression coverage for complete/reopen persistence and stable placement/order, plus unauthenticated update rejection without state mutation.
+
 ### File List
+
+- `src/backend/tests/TaskApiTests.cs`
+- `src/backend/tests/TaskAuthorizationTests.cs`

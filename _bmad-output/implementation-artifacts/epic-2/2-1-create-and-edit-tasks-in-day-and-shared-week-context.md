@@ -1,6 +1,6 @@
 # Story 2.1: Create and Edit Tasks in Day and Shared Week Context
 
-Status: ready-for-dev
+Status: done
 
 Epic: 2 - Task Lifecycle and Completion  
 Story ID: 2.1  

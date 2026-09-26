@@ -77,6 +77,93 @@ public sealed class TaskApiTests
         Assert.Equal("In Progress", response.Body.RootElement.GetProperty("Data").GetProperty("Status").GetString());
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("2026-08-19")]
+    public async Task UpdateTaskAsync_CompleteAndReopen_PreservesPlacementAndRelativeOrder(
+        string? dayDateValue)
+    {
+        var weekStartDate = new DateOnly(2026, 8, 17);
+        DateOnly? dayDate = dayDateValue is null ? null : DateOnly.Parse(dayDateValue);
+        var databaseName = Guid.NewGuid().ToString();
+        var options = new DbContextOptionsBuilder<TaskManagerDbContext>()
+            .UseInMemoryDatabase(databaseName)
+            .Options;
+        var workspace = TaskManager.Domain.Board.WeekWorkspace.Create(weekStartDate);
+        var firstTask = TaskManager.Domain.Board.TaskItem.Create(
+            workspace.Id,
+            weekStartDate,
+            "First task",
+            new DateOnly(2026, 8, 18),
+            "First notes");
+        var task = TaskManager.Domain.Board.TaskItem.Create(
+            workspace.Id,
+            weekStartDate,
+            "Target task",
+            dayDate,
+            "Target notes");
+        var lastTask = TaskManager.Domain.Board.TaskItem.Create(
+            workspace.Id,
+            weekStartDate,
+            "Last task",
+            null,
+            "Last notes");
+        var firstCreatedAt = new DateTime(2026, 8, 17, 8, 0, 0, DateTimeKind.Utc);
+        var taskCreatedAt = firstCreatedAt.AddMinutes(1);
+        var lastCreatedAt = firstCreatedAt.AddMinutes(2);
+
+        await using (var seedContext = new TaskManagerDbContext(options))
+        {
+            seedContext.WeekWorkspaces.Add(workspace);
+            seedContext.Tasks.AddRange(firstTask, task, lastTask);
+            seedContext.Entry(firstTask).Property(item => item.CreatedAtUtc).CurrentValue = firstCreatedAt;
+            seedContext.Entry(task).Property(item => item.CreatedAtUtc).CurrentValue = taskCreatedAt;
+            seedContext.Entry(lastTask).Property(item => item.CreatedAtUtc).CurrentValue = lastCreatedAt;
+            await seedContext.SaveChangesAsync();
+        }
+
+        var expectedTaskIds = new[] { firstTask.Id, task.Id, lastTask.Id };
+        var context = CreateContext();
+
+        foreach (var status in new[] { "Completed", "In Progress" })
+        {
+            await using (var updateContext = new TaskManagerDbContext(options))
+            {
+                var result = await facade.UpdateTaskAsync(
+                    task.Id,
+                    context,
+                    new UpdateTaskRequest(
+                        weekStartDate,
+                        "Target task",
+                        dayDate,
+                        "Target notes",
+                        status),
+                    updateContext,
+                    CancellationToken.None);
+                var response = ToResponse(result);
+
+                Assert.Equal(StatusCodes.Status200OK, response.StatusCode);
+                Assert.Equal(status, response.Body.RootElement.GetProperty("Data").GetProperty("Status").GetString());
+            }
+
+            context.Request.QueryString = new QueryString("?weekStartDate=2026-08-17");
+            await using var reloadContext = new TaskManagerDbContext(options);
+            var reloadResult = await facade.GetTasksAsync(context, reloadContext, CancellationToken.None);
+            var reloadResponse = ToResponse(reloadResult);
+            var tasks = reloadResponse.Body.RootElement.GetProperty("Data").EnumerateArray().ToArray();
+            var reloadedTask = Assert.Single(tasks, item => item.GetProperty("Id").GetGuid() == task.Id);
+
+            Assert.Equal(expectedTaskIds, tasks.Select(item => item.GetProperty("Id").GetGuid()));
+            Assert.Equal(task.Id, reloadedTask.GetProperty("Id").GetGuid());
+            Assert.Equal(workspace.Id, reloadedTask.GetProperty("WeekWorkspaceId").GetGuid());
+            Assert.Equal(dayDate?.ToString("yyyy-MM-dd"), reloadedTask.GetProperty("DayDate").GetString());
+            Assert.Equal(status, reloadedTask.GetProperty("Status").GetString());
+            Assert.Equal("Target task", reloadedTask.GetProperty("Title").GetString());
+            Assert.Equal("Target notes", reloadedTask.GetProperty("Notes").GetString());
+            Assert.Equal(taskCreatedAt, reloadedTask.GetProperty("CreatedAtUtc").GetDateTime());
+        }
+    }
+
     [Fact]
     public async Task CreateTaskAsync_ReturnsBadRequest_WhenTitleIsBlank()
     {
