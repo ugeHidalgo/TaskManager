@@ -18,7 +18,7 @@ so that I can plan repeated work without separate daily checks or a recurring te
 ## Acceptance Criteria
 
 1. Given `New Task` is open, when the form renders, then a `Recurring task` checkbox is shown immediately below `Notes` and is unchecked by default. Without recurrence selected, the existing single-task placement and creation flow remains unchanged.
-2. Given the checkbox is checked, when recurrence fields appear immediately below it, then accessible start-date and end-date date pickers default to the Monday of the currently viewed week and to that week's Friday in workweek view or Sunday in full-week view, respectively. `Placement` is read-only and displays the currently viewed week rather than a selectable day/shared-week destination; `Execution Time`, `Notes`, and `Status` remain available for the batch.
+2. Given the checkbox is checked, when recurrence fields appear immediately below it, then accessible start-date and end-date date pickers default to the Monday of the currently viewed week and to that week's Friday in workweek view or Sunday in full-week view, respectively. `Placement` is hidden because each generated task receives the day corresponding to its date; `Execution Time`, `Notes`, and `Status` remain available for the batch.
 3. Given the checkbox is unchecked again, when the form returns to ordinary creation, then the recurrence dates are hidden, ordinary `Placement` becomes editable again, and saving creates only one ordinary task.
 4. Given a valid inclusive start/end range, when the user saves, then exactly one ordinary day task is persisted for **each calendar date** from start through end (including weekends, even if workweek view hides them). Each task receives its own identity and day placement, plus the same title, execution time, notes, and initial status entered in the form. A range can cross week boundaries; every task belongs to the week containing its own date.
 5. Given a start date after the end date, a missing/invalid date, or an invalid task field, when saving is attempted, then inline validation prevents creation and retains the draft. The server also validates the range and task fields. A failed batch must not leave only some of the requested tasks persisted; show a non-sensitive error and retain the draft for retry.
@@ -32,7 +32,7 @@ so that I can plan repeated work without separate daily checks or a recurring te
 
 - [ ] Add unchecked `Recurring task` checkbox directly beneath `Notes` in the existing New Task form.
 - [ ] When checked, place `Start date` and `End date` date pickers directly below the checkbox, in that order; use the selected board week's Monday and its Friday/Sunday according to the current view mode as defaults.
-- [ ] While checked, show the selected board week as a read-only `Placement`; while unchecked, preserve the ordinary editable placement, including day and shared-week options.
+- [ ] While checked, hide `Placement` because day placement is assigned from each generated date; while unchecked, preserve the ordinary editable placement, including day and shared-week options.
 - [ ] Keep title, execution time, notes, and status available for every generated day; do not discard a valid execution time because the batch is initiated from week context.
 - [ ] Validate title, execution time, dates, and chronological range in the form, with accessible labels, keyboard support, and inline feedback.
 

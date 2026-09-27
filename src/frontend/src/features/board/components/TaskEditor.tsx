@@ -7,6 +7,7 @@ import {
 
 interface TaskEditorProps {
   weekStart: Date;
+  viewMode?: "workweek" | "fullweek";
   initialDayDate: Date | null;
   task?: TaskPayload;
   isSaving: boolean;
@@ -31,6 +32,15 @@ function parseExecutionTime(value: string): number | null {
 
 function isValidExecutionTime(value: string): boolean {
   return value === "" || parseExecutionTime(value) !== null;
+}
+
+function isValidDateOnly(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const date = new Date(`${value}T00:00:00`);
+  return formatDateOnly(date) === value;
 }
 
 function canStepExecutionTime(value: string, minutes: number): boolean {
@@ -59,6 +69,7 @@ function stepExecutionTime(value: string, minutes: number): string {
 
 export function TaskEditor({
   weekStart,
+  viewMode = "workweek",
   initialDayDate,
   task,
   isSaving,
@@ -73,6 +84,20 @@ export function TaskEditor({
   );
   const [status, setStatus] = useState(task?.status ?? "Not Started");
   const [executionTime, setExecutionTime] = useState(task?.executionTime ?? "");
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [startDate, setStartDate] = useState(formatDateOnly(weekStart));
+  const [endDate, setEndDate] = useState(() =>
+    formatDateOnly(
+      new Date(
+        weekStart.getFullYear(),
+        weekStart.getMonth(),
+        weekStart.getDate() + (viewMode === "fullweek" ? 6 : 4),
+      ),
+    ),
+  );
+  const [dateValidationMessage, setDateValidationMessage] = useState<
+    string | null
+  >(null);
   const [validationMessage, setValidationMessage] = useState<string | null>(
     null,
   );
@@ -93,16 +118,6 @@ export function TaskEditor({
   );
 
   const weekStartValue = formatDateOnly(weekStart);
-  const weekDates = Array.from({ length: 7 }, (_, index) =>
-    formatDateOnly(
-      new Date(
-        weekStart.getFullYear(),
-        weekStart.getMonth(),
-        weekStart.getDate() + index,
-      ),
-    ),
-  );
-
   function clearExecutionTimeError() {
     if (executionTimeErrorTimeout.current !== null) {
       window.clearTimeout(executionTimeErrorTimeout.current);
@@ -154,9 +169,13 @@ export function TaskEditor({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const isSharedWeekPlacement = !dayDate;
-    const normalizedExecutionTime = isSharedWeekPlacement ? "" : executionTime;
+    const normalizedExecutionTime =
+      isSharedWeekPlacement && !isRecurring ? "" : executionTime;
 
-    if (!isSharedWeekPlacement && !isValidExecutionTime(executionTime)) {
+    if (
+      (!isSharedWeekPlacement || isRecurring) &&
+      !isValidExecutionTime(executionTime)
+    ) {
       showExecutionTimeError();
       return;
     }
@@ -166,18 +185,31 @@ export function TaskEditor({
       return;
     }
 
+    if (isRecurring) {
+      if (!isValidDateOnly(startDate) || !isValidDateOnly(endDate)) {
+        setDateValidationMessage("Enter a valid start and end date.");
+        return;
+      }
+      if (startDate > endDate) {
+        setDateValidationMessage("Start date must be on or before end date.");
+        return;
+      }
+    }
+
     setValidationMessage(null);
+    setDateValidationMessage(null);
     onSave({
       weekStartDate: weekStartValue,
       title: title.trim(),
-      dayDate: dayDate || null,
+      dayDate: isRecurring ? null : dayDate || null,
       notes: notes.trim() || null,
       status,
       executionTime: normalizedExecutionTime,
+      ...(isRecurring ? { isRecurring: true, startDate, endDate } : {}),
     });
   }
 
-  const isSharedWeekPlacement = !dayDate;
+  const isSharedWeekPlacement = !dayDate && !isRecurring;
 
   return (
     <div className="task-editor-backdrop" role="presentation">
@@ -195,17 +227,19 @@ export function TaskEditor({
       >
         <h2 id="task-editor-title">{task ? "Edit task" : "New task"}</h2>
         <form onSubmit={handleSubmit} className="form-grid">
-          <label htmlFor="task-title">Title</label>
-          <input
-            id="task-title"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            autoFocus
-            aria-invalid={Boolean(validationMessage)}
-            aria-describedby={
-              validationMessage ? "task-editor-error" : undefined
-            }
-          />
+          <div className="task-title-row">
+            <label htmlFor="task-title">Title</label>
+            <input
+              id="task-title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              autoFocus
+              aria-invalid={Boolean(validationMessage)}
+              aria-describedby={
+                validationMessage ? "task-editor-error" : undefined
+              }
+            />
+          </div>
 
           {!isSharedWeekPlacement ? (
             <>
@@ -279,6 +313,57 @@ export function TaskEditor({
             </>
           ) : null}
 
+          <label className="task-recurring-toggle" htmlFor="task-recurring">
+            <input
+              id="task-recurring"
+              type="checkbox"
+              checked={isRecurring}
+              onChange={(event) => {
+                setIsRecurring(event.target.checked);
+                setDateValidationMessage(null);
+              }}
+            />
+            Recurring task
+          </label>
+
+          {isRecurring ? (
+            <div className="recurring-date-row">
+              <label htmlFor="task-start-date">Start date</label>
+              <input
+                id="task-start-date"
+                type="date"
+                value={startDate}
+                onChange={(event) => {
+                  setStartDate(event.target.value);
+                  setDateValidationMessage(null);
+                }}
+                aria-invalid={Boolean(dateValidationMessage)}
+                aria-describedby={
+                  dateValidationMessage ? "task-date-error" : undefined
+                }
+              />
+              <label htmlFor="task-end-date">End date</label>
+              <input
+                id="task-end-date"
+                type="date"
+                value={endDate}
+                onChange={(event) => {
+                  setEndDate(event.target.value);
+                  setDateValidationMessage(null);
+                }}
+                aria-invalid={Boolean(dateValidationMessage)}
+                aria-describedby={
+                  dateValidationMessage ? "task-date-error" : undefined
+                }
+              />
+              {dateValidationMessage ? (
+                <p id="task-date-error" className="error" role="alert">
+                  {dateValidationMessage}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           <label htmlFor="task-notes">Notes</label>
           <textarea
             id="task-notes"
@@ -287,19 +372,31 @@ export function TaskEditor({
             rows={3}
           />
 
-          <label htmlFor="task-placement">Placement</label>
-          <select
-            id="task-placement"
-            value={dayDate}
-            onChange={(event) => setDayDate(event.target.value)}
-          >
-            <option value="">Shared week</option>
-            {weekDates.map((date) => (
-              <option key={date} value={date}>
-                {date}
-              </option>
-            ))}
-          </select>
+          {!isRecurring ? (
+            <>
+              <label htmlFor="task-placement">Placement</label>
+              <select
+                id="task-placement"
+                value={dayDate}
+                onChange={(event) => setDayDate(event.target.value)}
+              >
+                <option value="">Shared week</option>
+                {Array.from({ length: 7 }, (_, index) =>
+                  formatDateOnly(
+                    new Date(
+                      weekStart.getFullYear(),
+                      weekStart.getMonth(),
+                      weekStart.getDate() + index,
+                    ),
+                  ),
+                ).map((date) => (
+                  <option key={date} value={date}>
+                    {date}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : null}
 
           <label htmlFor="task-status">Status</label>
           <select

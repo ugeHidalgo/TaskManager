@@ -275,6 +275,44 @@
   font: inherit;
 }
 
+.task-title-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.task-recurring-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.task-recurring-toggle input {
+  margin: 0;
+}
+
+.recurring-date-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.recurring-date-row input {
+  min-width: 0;
+  width: 100%;
+}
+
+.recurring-date-row .error {
+  grid-column: 1 / -1;
+}
+
+.task-title-row > input {
+  width: 100%;
+}
+
 .execution-time-controls {
   display: grid;
   grid-template-columns: 2.5rem minmax(0, 1fr);

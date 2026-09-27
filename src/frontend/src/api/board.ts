@@ -35,6 +35,9 @@ export interface SaveTaskInput {
   notes: string | null;
   status: string;
   executionTime: string;
+  isRecurring?: boolean;
+  startDate?: string;
+  endDate?: string;
 }
 
 export function formatDateOnly(value: Date): string {

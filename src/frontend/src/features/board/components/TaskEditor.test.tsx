@@ -120,12 +120,19 @@ describe("TaskEditor execution time", () => {
     const controls = container.querySelector(".execution-time-controls");
 
     expect(labels).toEqual([
-      "Title",
       "Execution time",
+      "Recurring task",
       "Notes",
       "Placement",
       "Status",
     ]);
+    expect(container.querySelector(".task-title-row")).toBeInTheDocument();
+    expect(
+      container.querySelector(".task-recurring-toggle"),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector(".task-title-row #task-recurring"),
+    ).toBeNull();
     expect(controls?.children).toHaveLength(3);
     expect(controls?.children[0]).toHaveTextContent("▲");
     expect(controls?.children[0]).toHaveClass(
@@ -136,6 +143,86 @@ describe("TaskEditor execution time", () => {
     expect(controls?.children[2]).toHaveClass(
       "execution-time-step-button--decrease",
     );
+    expect(
+      container.querySelector(".task-title-row")?.querySelector("#task-title"),
+    ).toBeTruthy();
+  });
+
+  it.each([
+    ["workweek", "2026-08-21"],
+    ["fullweek", "2026-08-23"],
+  ] as const)(
+    "uses the viewed week and %s end date for recurring tasks",
+    async (viewMode, expectedEndDate) => {
+      const user = userEvent.setup();
+      const onSave = vi.fn();
+      render(
+        <TaskEditor
+          weekStart={weekStart}
+          viewMode={viewMode}
+          initialDayDate={null}
+          isSaving={false}
+          errorMessage={null}
+          onCancel={vi.fn()}
+          onSave={onSave}
+        />,
+      );
+
+      await user.click(
+        screen.getByRole("checkbox", { name: "Recurring task" }),
+      );
+
+      expect(screen.getByLabelText("Start date")).toHaveValue("2026-08-17");
+      expect(screen.getByLabelText("End date")).toHaveValue(expectedEndDate);
+      expect(screen.getByText("Start date").parentElement).toHaveClass(
+        "recurring-date-row",
+      );
+      expect(screen.getByText("End date").parentElement).toBe(
+        screen.getByText("Start date").parentElement,
+      );
+      expect(screen.queryByLabelText("Placement")).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("textbox", { name: "Execution time" }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it("restores editable placement when recurring task is unchecked", async () => {
+    const user = userEvent.setup();
+    renderEditor(undefined, null);
+    const recurringCheckbox = screen.getByRole("checkbox", {
+      name: "Recurring task",
+    });
+
+    await user.click(recurringCheckbox);
+    expect(screen.queryByLabelText("Placement")).not.toBeInTheDocument();
+
+    await user.click(recurringCheckbox);
+    expect(screen.getByLabelText("Placement")).toBeEnabled();
+    expect(screen.getByLabelText("Placement")).toHaveValue("");
+  });
+
+  it("validates an inverted recurring date range without saving", async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor(undefined, null);
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Title" }),
+      "Daily task",
+    );
+    await user.click(screen.getByRole("checkbox", { name: "Recurring task" }));
+    expect(
+      screen.getByRole("checkbox", { name: "Recurring task" }),
+    ).toBeChecked();
+    fireEvent.change(screen.getByLabelText("Start date"), {
+      target: { value: "2026-08-23" },
+    });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Start date must be on or before end date.",
+    );
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it("initializes with the existing time and supports 30-minute steps", async () => {

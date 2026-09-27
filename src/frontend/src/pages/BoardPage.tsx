@@ -390,6 +390,7 @@ export function BoardPage() {
       {token && isEditorOpen ? (
         <TaskEditor
           weekStart={weekStart}
+          viewMode={viewMode}
           initialDayDate={editorDayDate}
           task={editorTask}
           isSaving={isSaving}
