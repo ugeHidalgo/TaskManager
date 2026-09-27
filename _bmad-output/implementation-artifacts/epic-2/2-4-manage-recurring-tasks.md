@@ -30,11 +30,11 @@ so that I can plan repeated work without separate daily checks or a recurring te
 
 ### Task 1 - New Task form and date defaults
 
-- [ ] Add unchecked `Recurring task` checkbox directly beneath `Notes` in the existing New Task form.
-- [ ] When checked, place `Start date` and `End date` date pickers directly below the checkbox, in that order; use the selected board week's Monday and its Friday/Sunday according to the current view mode as defaults.
-- [ ] While checked, hide `Placement` because day placement is assigned from each generated date; while unchecked, preserve the ordinary editable placement, including day and shared-week options.
-- [ ] Keep title, execution time, notes, and status available for every generated day; do not discard a valid execution time because the batch is initiated from week context.
-- [ ] Validate title, execution time, dates, and chronological range in the form, with accessible labels, keyboard support, and inline feedback.
+- [x] Add unchecked `Recurring task` checkbox directly beneath `Notes` in the existing New Task form.
+- [x] When checked, place `Start date` and `End date` date pickers directly below the checkbox, in that order; use the selected board week's Monday and its Friday/Sunday according to the current view mode as defaults.
+- [x] While checked, hide `Placement` because day placement is assigned from each generated date; while unchecked, preserve the ordinary editable placement, including day and shared-week options.
+- [x] Keep title, execution time, notes, and status available for every generated day; do not discard a valid execution time because the batch is initiated from week context.
+- [x] Validate title, execution time, dates, and chronological range in the form, with accessible labels, keyboard support, and inline feedback.
 
 ### Task 2 - Atomic per-day task creation
 

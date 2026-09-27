@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   formatDateOnly,
   createTask,
+  createRecurringTasks,
   deleteTask,
   getBoardForWeek,
   getTasksForWeek,
@@ -187,6 +188,14 @@ export function BoardPage() {
     try {
       if (editorTask) {
         await updateTask(token, editorTask.id, input);
+      } else if (input.isRecurring) {
+        const result = await createRecurringTasks(token, input);
+        const refreshedTasks = await getTasksForWeek(token, weekStart);
+        setTasks(refreshedTasks);
+        closeTaskEditor();
+        setSaveMessage(`${result.createdCount} tasks created.`);
+        setStatusMessagePhase(null);
+        return;
       } else {
         await createTask(token, input);
       }

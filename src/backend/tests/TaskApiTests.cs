@@ -87,6 +87,124 @@ public sealed class TaskApiTests
     }
 
     [Fact]
+    public async Task CreateRecurringTasksAsync_CreatesOneTaskPerDateAcrossWeeks()
+    {
+        await using var dbContext = CreateDbContext();
+        var context = CreateContext();
+        context.Request.Headers["Idempotency-Key"] = "batch-august-2026";
+
+        var result = await facade.CreateRecurringTasksAsync(
+            context,
+            new CreateRecurringTasksRequest(
+                new DateOnly(2026, 8, 21),
+                new DateOnly(2026, 8, 24),
+                "Daily review",
+                "Same notes",
+                "In Progress",
+                "09:30"),
+            dbContext,
+            CancellationToken.None);
+        var response = ToResponse(result);
+
+        Assert.Equal(StatusCodes.Status201Created, response.StatusCode);
+        var data = response.Body.RootElement.GetProperty("Data");
+        Assert.Equal(4, data.GetProperty("CreatedCount").GetInt32());
+        Assert.Equal(2, data.GetProperty("AffectedWeekStartDates").GetArrayLength());
+        Assert.Equal(4, await dbContext.Tasks.CountAsync());
+        Assert.Equal(2, await dbContext.WeekWorkspaces.CountAsync());
+        Assert.Equal(
+            new[] { "2026-08-21", "2026-08-22", "2026-08-23", "2026-08-24" },
+            await dbContext.Tasks
+                .OrderBy(task => task.DayDate)
+                .Select(task => task.DayDate!.Value.ToString("yyyy-MM-dd"))
+                .ToArrayAsync());
+        Assert.All(await dbContext.Tasks.ToListAsync(), task =>
+        {
+            Assert.Equal("Daily review", task.Title);
+            Assert.Equal("Same notes", task.Notes);
+            Assert.Equal("In Progress", task.Status);
+            Assert.Equal("09:30", task.ExecutionTime);
+            Assert.Equal("batch-august-2026", task.BatchId);
+        });
+    }
+
+    [Fact]
+    public async Task CreateRecurringTasksAsync_ReturnsExistingBatchOnRetry()
+    {
+        await using var dbContext = CreateDbContext();
+        var context = CreateContext();
+        context.Request.Headers["Idempotency-Key"] = "retryable-batch";
+        var request = new CreateRecurringTasksRequest(
+            new DateOnly(2026, 8, 17),
+            new DateOnly(2026, 8, 19),
+            "Repeat safely",
+            null,
+            null,
+            string.Empty);
+
+        var firstResult = await facade.CreateRecurringTasksAsync(
+            context, request, dbContext, CancellationToken.None);
+        var retryResult = await facade.CreateRecurringTasksAsync(
+            context, request, dbContext, CancellationToken.None);
+
+        Assert.Equal(StatusCodes.Status201Created, (firstResult as IStatusCodeHttpResult)?.StatusCode);
+        Assert.Equal(StatusCodes.Status200OK, (retryResult as IStatusCodeHttpResult)?.StatusCode);
+        Assert.Equal(3, await dbContext.Tasks.CountAsync());
+        Assert.Equal(
+            3,
+            ToResponse(retryResult).Body.RootElement
+                .GetProperty("Data").GetProperty("CreatedCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task CreateRecurringTasksAsync_RequiresIdempotencyKey()
+    {
+        await using var dbContext = CreateDbContext();
+        var result = await facade.CreateRecurringTasksAsync(
+            CreateContext(),
+            new CreateRecurringTasksRequest(
+                new DateOnly(2026, 8, 17),
+                new DateOnly(2026, 8, 17),
+                "Missing key",
+                null,
+                null,
+                string.Empty),
+            dbContext,
+            CancellationToken.None);
+
+        var response = ToResponse(result);
+        Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
+        Assert.Equal("task.idempotency_key_required", response.Body.RootElement
+            .GetProperty("Error").GetProperty("Code").GetString());
+        Assert.Empty(await dbContext.Tasks.ToListAsync());
+    }
+
+    [Fact]
+    public async Task CreateRecurringTasksAsync_RejectsInvertedRangeWithoutPersisting()
+    {
+        await using var dbContext = CreateDbContext();
+        var context = CreateContext();
+        context.Request.Headers["Idempotency-Key"] = "invalid-range";
+
+        var result = await facade.CreateRecurringTasksAsync(
+            context,
+            new CreateRecurringTasksRequest(
+                new DateOnly(2026, 8, 20),
+                new DateOnly(2026, 8, 19),
+                "Invalid range",
+                null,
+                null,
+                string.Empty),
+            dbContext,
+            CancellationToken.None);
+
+        var response = ToResponse(result);
+        Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
+        Assert.Empty(await dbContext.Tasks.ToListAsync());
+        Assert.Empty(await dbContext.WeekWorkspaces.ToListAsync());
+    }
+
+    [Fact]
     public async Task UpdateTaskAsync_UpdatesTaskValues()
     {
         var context = CreateContext();

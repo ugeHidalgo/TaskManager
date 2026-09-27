@@ -8,6 +8,19 @@ public sealed record CreateTaskRequest(
     string? Status,
     string ExecutionTime);
 
+public sealed record CreateRecurringTasksRequest(
+    DateOnly StartDate,
+    DateOnly EndDate,
+    string Title,
+    string? Notes,
+    string? Status,
+    string ExecutionTime);
+
+public sealed record RecurringTasksResponse(
+    int CreatedCount,
+    IReadOnlyList<TaskResponse> Tasks,
+    IReadOnlyList<DateOnly> AffectedWeekStartDates);
+
 public sealed record UpdateTaskRequest(
     DateOnly WeekStartDate,
     string Title,

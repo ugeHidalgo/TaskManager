@@ -18,6 +18,10 @@ public sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
             .HasColumnName("week_workspace_id")
             .IsRequired();
 
+        builder.Property(task => task.BatchId)
+            .HasColumnName("batch_id")
+            .HasMaxLength(100);
+
         builder.Property(task => task.DayDate)
             .HasColumnName("day_date");
 
@@ -54,5 +58,6 @@ public sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(task => new { task.WeekWorkspaceId, task.DayDate });
+        builder.HasIndex(task => task.BatchId);
     }
 }

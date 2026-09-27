@@ -185,6 +185,14 @@ app.MapPost("/api/v1/tasks", [Authorize] (
     CancellationToken cancellationToken) =>
     facade.CreateTaskAsync(httpContext, request, dbContext, cancellationToken));
 
+app.MapPost("/api/v1/tasks/recurring", [Authorize] (
+    CreateRecurringTasksRequest request,
+    HttpContext httpContext,
+    TaskManagerFacade facade,
+    TaskManagerDbContext dbContext,
+    CancellationToken cancellationToken) =>
+    facade.CreateRecurringTasksAsync(httpContext, request, dbContext, cancellationToken));
+
 app.MapPut("/api/v1/tasks/{taskId:guid}", [Authorize] (
     Guid taskId,
     UpdateTaskRequest request,

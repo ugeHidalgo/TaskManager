@@ -14,6 +14,8 @@ public sealed class TaskItem
 
     public Guid WeekWorkspaceId { get; private set; }
 
+    public string? BatchId { get; private set; }
+
     public DateOnly? DayDate { get; private set; }
 
     public string Title { get; private set; } = string.Empty;
@@ -35,7 +37,8 @@ public sealed class TaskItem
         DateOnly? dayDate = null,
         string? notes = null,
         string? status = null,
-        string executionTime = "")
+        string executionTime = "",
+        string? batchId = null)
     {
         ValidateWorkspaceId(weekWorkspaceId);
         var normalizedWeekStartDate = NormalizeWeekStart(weekStartDate);
@@ -50,6 +53,7 @@ public sealed class TaskItem
         {
             Id = Guid.NewGuid(),
             WeekWorkspaceId = weekWorkspaceId,
+            BatchId = NormalizeBatchId(batchId),
             DayDate = dayDate,
             Title = normalizedTitle,
             Notes = normalizedNotes,
@@ -104,6 +108,22 @@ public sealed class TaskItem
     private static string? NormalizeNotes(string? notes)
     {
         return string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+    }
+
+    private static string? NormalizeBatchId(string? batchId)
+    {
+        if (string.IsNullOrWhiteSpace(batchId))
+        {
+            return null;
+        }
+
+        var normalizedBatchId = batchId.Trim();
+        if (normalizedBatchId.Length > 100)
+        {
+            throw new ArgumentException("Batch id is invalid.", nameof(batchId));
+        }
+
+        return normalizedBatchId;
     }
 
     private static string NormalizeStatus(string? status)

@@ -38,6 +38,13 @@ export interface SaveTaskInput {
   isRecurring?: boolean;
   startDate?: string;
   endDate?: string;
+  idempotencyKey?: string;
+}
+
+export interface RecurringTasksResponse {
+  createdCount: number;
+  tasks: TaskPayload[];
+  affectedWeekStartDates: string[];
 }
 
 export function formatDateOnly(value: Date): string {
@@ -115,14 +122,19 @@ async function saveTaskRequest<T>(
   url: string,
   method: string,
   token: string,
-  input: SaveTaskInput,
+  input: object,
+  idempotencyKey?: string,
 ) {
+  const headers: HeadersInit = {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+  if (idempotencyKey) {
+    headers["Idempotency-Key"] = idempotencyKey;
+  }
   const response = await fetch(url, {
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(input),
   });
 
@@ -154,6 +166,27 @@ export function createTask(
     "POST",
     token,
     input,
+  );
+}
+
+export function createRecurringTasks(
+  token: string,
+  input: SaveTaskInput,
+): Promise<RecurringTasksResponse> {
+  const { startDate, endDate, title, notes, status, executionTime } = input;
+  return saveTaskRequest<RecurringTasksResponse>(
+    `${apiBaseUrl}/tasks/recurring`,
+    "POST",
+    token,
+    {
+      startDate: startDate!,
+      endDate: endDate!,
+      title,
+      notes,
+      status,
+      executionTime,
+    },
+    input.idempotencyKey,
   );
 }
 

@@ -164,6 +164,89 @@ public sealed class TaskManagerFacade
         }
     }
 
+    public async Task<IResult> CreateRecurringTasksAsync(
+        HttpContext httpContext,
+        CreateRecurringTasksRequest request,
+        TaskManagerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var batchId = httpContext.Request.Headers["Idempotency-Key"].ToString().Trim();
+        if (string.IsNullOrWhiteSpace(batchId) || batchId.Length > 100)
+        {
+            return Results.BadRequest(ApiErrorResponse.Create(
+                code: "task.idempotency_key_required",
+                message: "An idempotency key is required for recurring task creation.",
+                requestId: httpContext.TraceIdentifier));
+        }
+
+        try
+        {
+            if (request.StartDate > request.EndDate)
+            {
+                throw new ArgumentException("Start date must be on or before end date.", nameof(request));
+            }
+
+            var existingTasks = await dbContext.Tasks
+                .Where(task => task.BatchId == batchId)
+                .OrderBy(task => task.DayDate)
+                .ToListAsync(cancellationToken);
+            if (existingTasks.Count > 0)
+            {
+                return Results.Ok(ApiSuccessResponse<RecurringTasksResponse>.Create(
+                    ToRecurringTasksResponse(existingTasks),
+                    httpContext.TraceIdentifier));
+            }
+
+            await using var transaction = dbContext.Database.IsRelational()
+                ? await dbContext.Database.BeginTransactionAsync(cancellationToken)
+                : null;
+            var generatedTasks = new List<TaskItem>();
+            var affectedWeekStartDates = new HashSet<DateOnly>();
+            var workspacesByWeek = new Dictionary<DateOnly, WeekWorkspace>();
+
+            for (var date = request.StartDate; date <= request.EndDate; date = date.AddDays(1))
+            {
+                var weekStartDate = ToMonday(date);
+                if (!workspacesByWeek.TryGetValue(weekStartDate, out var workspace))
+                {
+                    workspace = await GetOrCreateWorkspaceAsync(dbContext, weekStartDate, cancellationToken);
+                    workspacesByWeek.Add(weekStartDate, workspace);
+                }
+                var task = TaskItem.Create(
+                    workspace.Id,
+                    weekStartDate,
+                    request.Title,
+                    date,
+                    request.Notes,
+                    request.Status,
+                    request.ExecutionTime,
+                    batchId);
+                generatedTasks.Add(task);
+                affectedWeekStartDates.Add(weekStartDate);
+                dbContext.Tasks.Add(task);
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
+
+            return Results.Created(
+                "/api/v1/tasks/recurring",
+                ApiSuccessResponse<RecurringTasksResponse>.Create(
+                    ToRecurringTasksResponse(generatedTasks, affectedWeekStartDates),
+                    httpContext.TraceIdentifier));
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(ApiErrorResponse.Create(
+                code: "task.validation",
+                message: exception.Message,
+                requestId: httpContext.TraceIdentifier));
+        }
+    }
+
     public async Task<IResult> UpdateTaskAsync(
         Guid taskId,
         HttpContext httpContext,
@@ -269,6 +352,20 @@ public sealed class TaskManagerFacade
             task.ExecutionTime,
             task.CreatedAtUtc,
             task.UpdatedAtUtc);
+    }
+
+    private static RecurringTasksResponse ToRecurringTasksResponse(
+        IReadOnlyList<TaskItem> tasks,
+        IEnumerable<DateOnly>? affectedWeekStartDates = null)
+    {
+        var weeks = (affectedWeekStartDates ?? tasks.Select(task => task.DayDate!.Value).Select(ToMonday))
+            .Distinct()
+            .OrderBy(date => date)
+            .ToArray();
+        return new RecurringTasksResponse(
+            tasks.Count,
+            tasks.Select(ToTaskResponse).ToArray(),
+            weeks);
     }
 
     private static DateOnly ResolveWeekStartDate(HttpContext httpContext, string queryParameter = "week_start_date")

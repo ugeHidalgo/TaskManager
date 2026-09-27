@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import {
   formatDateOnly,
   type SaveTaskInput,
@@ -84,6 +84,7 @@ export function TaskEditor({
   );
   const [status, setStatus] = useState(task?.status ?? "Not Started");
   const [executionTime, setExecutionTime] = useState(task?.executionTime ?? "");
+  const recurringBatchId = useId();
   const [isRecurring, setIsRecurring] = useState(false);
   const [startDate, setStartDate] = useState(formatDateOnly(weekStart));
   const [endDate, setEndDate] = useState(() =>
@@ -205,7 +206,14 @@ export function TaskEditor({
       notes: notes.trim() || null,
       status,
       executionTime: normalizedExecutionTime,
-      ...(isRecurring ? { isRecurring: true, startDate, endDate } : {}),
+      ...(isRecurring
+        ? {
+            isRecurring: true,
+            startDate,
+            endDate,
+            idempotencyKey: recurringBatchId,
+          }
+        : {}),
     });
   }
 

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createRecurringTasks,
   createTask,
   formatDateOnly,
   getBoardForWeek,
@@ -129,6 +130,49 @@ describe("board api", () => {
           notes: null,
           status: "In Progress",
           executionTime: "13:30",
+        }),
+      }),
+    );
+  });
+
+  it("creates recurring tasks with an idempotency key", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: { createdCount: 3, tasks: [], affectedWeekStartDates: [] },
+        }),
+        { status: 201, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    await createRecurringTasks("jwt-token", {
+      weekStartDate: "2026-08-17",
+      title: "Daily review",
+      dayDate: null,
+      notes: null,
+      status: "Not Started",
+      executionTime: "09:30",
+      isRecurring: true,
+      startDate: "2026-08-17",
+      endDate: "2026-08-19",
+      idempotencyKey: "batch-key",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/tasks\/recurring$/),
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer jwt-token",
+          "Idempotency-Key": "batch-key",
+        }),
+        body: JSON.stringify({
+          startDate: "2026-08-17",
+          endDate: "2026-08-19",
+          title: "Daily review",
+          notes: null,
+          status: "Not Started",
+          executionTime: "09:30",
         }),
       }),
     );
