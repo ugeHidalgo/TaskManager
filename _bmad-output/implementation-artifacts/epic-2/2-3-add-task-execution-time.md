@@ -1,6 +1,10 @@
+---
+baseline_commit: 7cbfe90c68f93c6ddb330cb502ae0e90398f29a4
+---
+
 # Story 2.3: Add Optional Task Execution Time
 
-Status: ready-for-dev
+Status: in-progress
 
 Epic: 2 - Task Lifecycle and Completion  
 Story ID: 2.3  
@@ -21,13 +25,17 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 2. Given a task has a fixed execution time, when it is created or updated, then `ExecutionTime` is persisted and returned as an `hh:mm` string.
 3. Given a task card is rendered, when `ExecutionTime` is non-empty, then the time appears in the first row immediately before the task title.
 4. Given a task card is rendered, when `ExecutionTime` is empty, then no time text is shown and the title remains correctly positioned.
-5. When `ExecutionTime` is empty, it must not be displayed.
-6. Given a task card is rendered, when the user chooses the clock control, then a small time-edit popup opens with a labelled time selector and the current value preselected when one exists.
-7. Given the time popup is open, when the user selects a time and accepts, then the new `ExecutionTime` value is persisted and displayed on the task card.
-8. Given the time popup is open with an existing time, when the user chooses clear time, then `ExecutionTime` becomes an empty string after the change is accepted and the card no longer displays a time.
-9. Given the time popup is open, when the user cancels or closes it without accepting, then the task and its persisted `ExecutionTime` remain unchanged and the popup closes.
-10. Given an execution-time value is invalid or persistence fails, when the API returns an error, then the prior value remains intact and a clear non-sensitive error is exposed.
-11. Given keyboard or assistive-technology usage, when the clock control or popup is used, then the control has an accessible name, focus is usable, and the time value is not communicated by color alone.
+5. Given a task card is rendered, when `ExecutionTime` is empty, then no execution-time text is displayed in the first row.
+6. Given a task card is rendered, when `ExecutionTime` is non-empty, then its value is displayed immediately before the task title in the first row and no clock control is displayed there.
+7. Given the user opens `Edit Task`, then the editor contains an `ExecutionTime` text field that is empty or contains the current `hh:mm` value.
+8. Given the `ExecutionTime` field is edited, then its increment and decrement controls move in 30-minute steps while manual entry is allowed when the final value is empty or valid `hh:mm`.
+9. Given the user accepts or closes `Edit Task` with a valid `ExecutionTime`, then the value is persisted, including an empty string, and the task card immediately reflects whether the time is visible or hidden.
+10. Given the user attempts to accept or close `Edit Task` with an invalid non-empty `ExecutionTime`, then an inline error is shown and the editor remains open until the value is corrected or cleared.
+11. Given an existing execution time is cleared in `Edit Task`, when the change is accepted, then `ExecutionTime` is persisted as an empty string and no execution-time text is displayed in the task card.
+12. Given keyboard or assistive-technology usage, when the `ExecutionTime` field is edited, then it has an accessible label, usable focus, and an error message that is announced without relying on color alone.
+13. Given the `ExecutionTime` field contains an invalid value, when the error is shown in `Edit Task`, then the error message blinks for 15 seconds, remains fixed afterward, and stays visible until the value is corrected or cleared.
+14. Given the `ExecutionTime` increment or decrement control is used, when the next 30-minute step would fall outside `00:00`–`23:59`, then the value remains unchanged and never wraps or crosses either limit.
+15. Given the user manually enters a non-empty malformed value or a time outside `00:00`–`23:59`, when validation runs, then the field is marked invalid and displays: `Execution time must be empty or within the range 00:00 - 23:59.`
 
 ## Data Contract
 
@@ -35,35 +43,36 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 - `ExecutionTime` is a required string property at the model boundary.
 - Use `""` when no time is configured.
 - Use the exact `hh:mm` representation when a time is configured.
-- The accepted selector range is `00:00` through `24:00`, subject to the chosen browser control's representable value and explicit validation.
+- Accepted values are the empty string or a valid `hh:mm` value from `00:00` through `23:59`; the editor uses 30-minute step controls without crossing either boundary while allowing manual entry subject to the same validation.
 
 ## Tasks / Subtasks
 
 ### Task 1 - Task model and persistence
 
-- [ ] Add the `ExecutionTime` string property to the task domain model with an empty-string default.
-- [ ] Add database mapping and migration using the existing PostgreSQL conventions.
-- [ ] Preserve existing tasks by backfilling `ExecutionTime` to `""`.
-- [ ] Validate empty string or `hh:mm` values and reject malformed times without changing the prior value.
+- [x] Add the `ExecutionTime` string property to the task domain model with an empty-string default.
+- [x] Add database mapping and migration using the existing PostgreSQL conventions.
+- [x] Preserve existing tasks by backfilling `ExecutionTime` to `""`.
+- [x] Validate empty string or `hh:mm` values from `00:00` through `23:59`, rejecting malformed or out-of-range times without changing the prior value.
 
 ### Task 2 - Authenticated API and editor
 
 - [ ] Extend task create, update, and response contracts with `ExecutionTime`.
 - [ ] Preserve the value through task creation and editing, including the empty-string case.
-- [ ] Add the clock action and small time popup to the existing task-card/editor interaction patterns.
-- [ ] Support select, accept, clear, cancel, and keyboard dismissal behavior.
+- [ ] Add an `ExecutionTime` text field to the existing `Edit Task` window, initialized with the current value or an empty string.
+- [ ] Support 30-minute increment/decrement controls that stay within `00:00`–`23:59`, manual editing, clear-by-empty-value, accept, cancel, and keyboard interaction.
+- [ ] Keep the editor open and show `Execution time must be empty or within the range 00:00 - 23:59.` when the value is neither empty nor valid `hh:mm` within that range.
+- [ ] Make the `ExecutionTime` validation error blink for 15 seconds, then remain fixed in `Edit Task` until the value is corrected or cleared.
 
 ### Task 3 - Board presentation
 
-- [ ] Add the clock button as the first control in row one, before the optional execution time and title.
-- [ ] Render a non-empty execution time immediately before the title.
+- [ ] Render a non-empty execution time immediately before the title in row one; do not render a clock control in row one.
 - [ ] Keep completed-card minimization, status controls, edit/delete controls, and shared-week/day layouts intact.
 - [ ] Ensure popup positioning and focus remain usable in workweek and full-week views.
 
 ### Task 4 - Tests and validation
 
 - [ ] Test empty and populated `ExecutionTime` persistence through create, update, reload, and board rendering.
-- [ ] Test the clock control, popup accept, clear, cancel, keyboard access, and accessible naming.
+- [ ] Test the `Edit Task` execution-time field, 30-minute controls, manual entry, accept, clear, cancel, keyboard access, and accessible naming.
 - [ ] Test invalid values and failed persistence rollback.
 - [ ] Run focused frontend/backend tests, lint, migration/build checks, and production builds.
 
@@ -90,10 +99,11 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 
 ## Definition of Done
 
-- [ ] `ExecutionTime` persists as empty string or valid `hh:mm`.
-- [ ] Task cards show the optional time before the title and expose the clock action first.
-- [ ] Users can set, modify, clear, accept, or cancel an execution time.
-- [ ] Popup and clock control are keyboard accessible and preserve existing card behavior.
+- [ ] `ExecutionTime` persists as empty string or valid `hh:mm` from `00:00` through `23:59`.
+- [ ] Task cards show the optional time before the title and no clock control appears in row one.
+- [ ] `Edit Task` allows users to set, modify, clear, accept, or cancel an execution time.
+- [ ] The execution-time field supports 30-minute steps, valid manual `hh:mm` entry, accessible errors, and preserves existing card behavior.
+- [ ] Execution-time errors blink for 15 seconds and then remain visible in `Edit Task` until validation succeeds.
 - [ ] Focused tests and quality gates pass.
 
 ## Dev Agent Record
@@ -102,6 +112,29 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 
 ### Debug Log References
 
+- `dotnet test src/backend/tests/Taskmanager.Tests.csproj --filter FullyQualifiedName~TaskItem` — passed (18 tests).
+- `dotnet tool run dotnet-ef migrations has-pending-model-changes ...` — no pending model changes.
+- `dotnet test TaskManager.sln` — passed (37 tests); migration applied by the PostgreSQL integration test.
+- After tightening the range to `00:00`–`23:59`, `dotnet test TaskManager.sln` passed (39 tests); no EF model changes are pending.
+
 ### Completion Notes List
 
+- Completed Task 1 only: added `ExecutionTime` with an empty-string default, required PostgreSQL mapping/default, and migration backfill for existing rows.
+- Domain validation accepts empty or exact `hh:mm` values from `00:00` through `23:59`; update validation completes before mutating the task, so invalid times preserve prior values.
+- The completed Task 1 validation was updated to reject `24:00`; increment/decrement boundary handling and the inline editor error remain Task 2 work.
+- Tasks 2–4 and story-wide Definition of Done remain incomplete; story remains `in-progress`.
+
 ### File List
+
+- `src/backend/src/TaskManager.Domain/Board/TaskItem.cs`
+- `src/backend/src/TaskManager.Infrastructure/Persistence/Configurations/TaskItemConfiguration.cs`
+- `src/backend/src/TaskManager.Infrastructure/Persistence/Migrations/20260927053011_AddTaskExecutionTime.cs`
+- `src/backend/src/TaskManager.Infrastructure/Persistence/Migrations/20260927053011_AddTaskExecutionTime.Designer.cs`
+- `src/backend/src/TaskManager.Infrastructure/Persistence/Migrations/TaskManagerDbContextModelSnapshot.cs`
+- `src/backend/tests/TaskItemTests.cs`
+- `src/backend/tests/TaskItemPersistenceTests.cs`
+
+### Change Log
+
+- 2026-09-27: Implemented and validated Task 1 of Story 2.3.
+- 2026-09-27: Tightened the accepted `ExecutionTime` range to `00:00`–`23:59` and specified editor boundary/error behavior.

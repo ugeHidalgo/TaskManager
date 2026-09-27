@@ -35,6 +35,11 @@ public sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
             .HasMaxLength(32)
             .IsRequired();
 
+        builder.Property(task => task.ExecutionTime)
+            .HasColumnName("execution_time")
+            .IsRequired()
+            .HasDefaultValue(string.Empty);
+
         builder.Property(task => task.CreatedAtUtc)
             .HasColumnName("created_at_utc")
             .IsRequired();

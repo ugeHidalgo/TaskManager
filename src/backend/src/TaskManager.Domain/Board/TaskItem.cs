@@ -3,6 +3,7 @@ namespace TaskManager.Domain.Board;
 public sealed class TaskItem
 {
     private const string DefaultStatus = "Not Started";
+    private const string InvalidExecutionTimeMessage = "Execution time must be empty or within the range 00:00 - 23:59.";
     private static readonly string[] AllowedStatuses = ["Not Started", "In Progress", "Completed"];
 
     private TaskItem()
@@ -21,6 +22,8 @@ public sealed class TaskItem
 
     public string Status { get; private set; } = DefaultStatus;
 
+    public string ExecutionTime { get; private set; } = string.Empty;
+
     public DateTime CreatedAtUtc { get; private set; }
 
     public DateTime UpdatedAtUtc { get; private set; }
@@ -31,13 +34,15 @@ public sealed class TaskItem
         string title,
         DateOnly? dayDate = null,
         string? notes = null,
-        string? status = null)
+        string? status = null,
+        string executionTime = "")
     {
         ValidateWorkspaceId(weekWorkspaceId);
         var normalizedWeekStartDate = NormalizeWeekStart(weekStartDate);
         var normalizedTitle = NormalizeTitle(title);
         var normalizedNotes = NormalizeNotes(notes);
         var normalizedStatus = NormalizeStatus(status);
+        var normalizedExecutionTime = NormalizeExecutionTime(executionTime);
         ValidateDayDate(normalizedWeekStartDate, dayDate);
         var now = DateTime.UtcNow;
 
@@ -49,6 +54,7 @@ public sealed class TaskItem
             Title = normalizedTitle,
             Notes = normalizedNotes,
             Status = normalizedStatus,
+            ExecutionTime = normalizedExecutionTime,
             CreatedAtUtc = now,
             UpdatedAtUtc = now,
         };
@@ -59,14 +65,20 @@ public sealed class TaskItem
         string title,
         DateOnly? dayDate,
         string? notes,
-        string? status)
+        string? status,
+        string executionTime = "")
     {
         var normalizedWeekStartDate = NormalizeWeekStart(weekStartDate);
         ValidateDayDate(normalizedWeekStartDate, dayDate);
+        var normalizedTitle = NormalizeTitle(title);
+        var normalizedNotes = NormalizeNotes(notes);
+        var normalizedStatus = NormalizeStatus(status);
+        var normalizedExecutionTime = NormalizeExecutionTime(executionTime);
 
-        Title = NormalizeTitle(title);
-        Notes = NormalizeNotes(notes);
-        Status = NormalizeStatus(status);
+        Title = normalizedTitle;
+        Notes = normalizedNotes;
+        Status = normalizedStatus;
+        ExecutionTime = normalizedExecutionTime;
         DayDate = dayDate;
         UpdatedAtUtc = DateTime.UtcNow;
     }
@@ -103,6 +115,38 @@ public sealed class TaskItem
         }
 
         return normalizedStatus;
+    }
+
+    private static string NormalizeExecutionTime(string executionTime)
+    {
+        if (executionTime is null)
+        {
+            throw new ArgumentException(InvalidExecutionTimeMessage, nameof(executionTime));
+        }
+
+        if (executionTime.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        if (executionTime.Length != 5
+            || executionTime[2] != ':'
+            || !char.IsAsciiDigit(executionTime[0])
+            || !char.IsAsciiDigit(executionTime[1])
+            || !char.IsAsciiDigit(executionTime[3])
+            || !char.IsAsciiDigit(executionTime[4]))
+        {
+            throw new ArgumentException(InvalidExecutionTimeMessage, nameof(executionTime));
+        }
+
+        var hour = ((executionTime[0] - '0') * 10) + (executionTime[1] - '0');
+        var minute = ((executionTime[3] - '0') * 10) + (executionTime[4] - '0');
+        if (hour > 23 || minute > 59)
+        {
+            throw new ArgumentException(InvalidExecutionTimeMessage, nameof(executionTime));
+        }
+
+        return executionTime;
     }
 
     private static void ValidateDayDate(DateOnly weekStartDate, DateOnly? dayDate)

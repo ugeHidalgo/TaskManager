@@ -424,20 +424,32 @@ So that tasks with a fixed start time are clearly scheduled while flexible tasks
 **Then** the time appears in the first row immediately before the task title
 
 **Given** a task card is rendered
-**When** the user chooses the clock control
-**Then** a small time-edit popup opens with the current value preselected when one exists
+**When** `ExecutionTime` is empty
+**Then** no execution-time text is displayed in the first row
 
-**Given** the time popup is open
-**When** the user selects a time and accepts
-**Then** the new value is persisted and displayed on the task card
+**Given** a task card is rendered
+**When** `ExecutionTime` is non-empty
+**Then** its value appears immediately before the title and no clock control is displayed in the first row
 
-**Given** the time popup is open with an existing time
-**When** the user chooses clear time
-**Then** `ExecutionTime` becomes an empty string and the card no longer displays a time
+**Given** the user opens `Edit Task`
+**When** the editor is displayed
+**Then** an `ExecutionTime` text field contains the current `hh:mm` value or is empty
 
-**Given** the time popup is open
-**When** the user cancels without accepting
-**Then** the task and persisted `ExecutionTime` remain unchanged and the popup closes
+**Given** the `ExecutionTime` field is edited
+**When** the user uses increment/decrement controls
+**Then** the value changes in 30-minute steps while manual `hh:mm` entry remains allowed
+
+**Given** the user accepts `Edit Task` with a valid or empty `ExecutionTime`
+**When** the task is saved
+**Then** the value is persisted, including an empty string, and the card shows or hides the time accordingly
+
+**Given** the user attempts to accept `Edit Task` with an invalid non-empty `ExecutionTime`
+**When** validation runs
+**Then** an error is shown and the editor remains open
+
+**Given** the `ExecutionTime` field contains an invalid value
+**When** the error is shown in `Edit Task`
+**Then** the error message blinks for 15 seconds, remains fixed afterward, and stays visible until the value is corrected or cleared
 
 ### Story 2.4: Manage Recurring Tasks and Daily Checks
 
