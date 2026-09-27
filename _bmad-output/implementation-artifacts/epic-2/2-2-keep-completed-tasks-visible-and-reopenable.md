@@ -1,6 +1,6 @@
 # Story 2.2: Keep Completed Tasks Visible and Reopenable
 
-Status: in-progress
+Status: done
 
 Epic: 2 - Task Lifecycle and Completion  
 Story ID: 2.2  
@@ -79,7 +79,7 @@ so that I can keep progress context without losing the ability to reactivate wor
 
 ## Scope Boundaries
 
-- Do not implement recurring-task daily checks, day/week completion calculations, reorder, or unsaved-change protection.
+- Do not implement date-range batch creation (Story 2.4), day/week completion calculations, reorder, or unsaved-change protection.
 - Do not remove completed tasks from API responses or board lists.
 
 ## Dev Notes

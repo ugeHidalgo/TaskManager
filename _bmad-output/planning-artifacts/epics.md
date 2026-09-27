@@ -17,9 +17,9 @@ This document provides the complete epic and story breakdown for TaskManager, de
 ### Functional Requirements
 
 FR1: Single-user authentication with username/password, secure password hashing, and JWT session management.
-FR2: Weekly board display with Monday-Friday columns, recurring tasks section, unscheduled tasks section, and current-day highlight.
+FR2: Weekly board display with Monday-Friday columns (optional full-week Saturday/Sunday view), unscheduled tasks section, day tasks, and current-day highlight.
 FR3: Full task management (create/read/update/delete), mark complete, and drag-and-drop reorder across day columns and unscheduled section.
-FR4: Recurring tasks creation and per-day completion marking in recurring section.
+FR4: Recurring-task batch creation from New Task across an inclusive date range; each created day task supports individual editing, completion, and deletion.
 FR5: Day completion indicator when all day tasks are completed.
 FR6: Week completion feedback when all five days are completed.
 FR7: Unsaved changes protection via leave confirmation flow.
@@ -73,7 +73,7 @@ UX-DR12: Accessibility baseline includes keyboard-operable actions, AA-level rea
 - FR2: Epic 1 - Weekly board baseline with Monday-Friday structure and today focus
 - FR3: Epic 2 - Task CRUD and completion behavior
 - FR3: Epic 3 - Drag-and-drop reorder and persistent ordering semantics
-- FR4: Epic 2 - Recurring task creation and per-day completion
+- FR4: Epic 2 - Date-range batch creation and independent management of generated tasks
 - FR5: Epic 2 - Day completion indicator behavior
 - FR6: Epic 2 - Week completion feedback behavior
 - FR7: Epic 2 - Unsaved changes confirmation on navigation
@@ -451,33 +451,39 @@ So that tasks with a fixed start time are clearly scheduled while flexible tasks
 **When** the error is shown in `Edit Task`
 **Then** the error message blinks for 15 seconds, remains fixed afterward, and stays visible until the value is corrected or cleared
 
-### Story 2.4: Manage Recurring Tasks and Daily Checks
+### Story 2.4: Manage Recurring Tasks
 
 As a planner,
-I want recurring tasks and per-day completion checks,
-So that I can track habitual responsibilities across the week.
+I want to create a task for every day in a chosen date range and manage each independently,
+So that I can plan repeated work without separate daily checks.
 
 **Acceptance Criteria:**
 
-**Given** recurring task settings
-**When** user creates or updates a recurring task
-**Then** it appears in the recurring section with expected schedule
-**And** recurring definition is persisted
+**Given** the New Task form
+**When** it opens
+**Then** an unchecked `Recurring task` checkbox is shown directly below Notes
+**And** ordinary single-task placement and creation remain unchanged while it is unchecked
 
-**Given** a recurring task is due for a day
-**When** user marks it done for that day
-**Then** day-specific completion state is persisted
-**And** other days remain unchanged
+**Given** the user checks `Recurring task`
+**When** the form updates
+**Then** Start date and End date date pickers appear immediately below the checkbox
+**And** they default to the Monday of the currently viewed week and its Friday in workweek view or Sunday in full-week view
+**And** Placement becomes read-only and displays that viewed week; title, execution time, notes, and status remain editable
 
-**Given** recurring task is not checked for a day
-**When** day closes
-**Then** status remains incomplete for that day only
-**And** completion does not auto-propagate to other days
+**Given** an inclusive valid date range (including weekends and dates in other weeks)
+**When** the user saves
+**Then** exactly one ordinary day task per calendar date is created atomically in its containing week
+**And** each has the same title, execution time, notes, and initial status, with its own identity and day placement
 
-**Given** recurring data is loaded
-**When** board renders
-**Then** recurring items are visually distinguishable from standard tasks
-**And** interaction behavior remains consistent
+**Given** an invalid range or save failure
+**When** the user attempts to save
+**Then** validation or a non-sensitive error is shown and the draft is retained
+**And** no partial batch is persisted
+
+**Given** a task created in the batch
+**When** the user edits, completes/reopens, or confirms deletion of that task
+**Then** only that task changes, using the existing task flows
+**And** other generated tasks are unaffected after reload or week navigation
 
 ### Story 2.5: Compute Day and Week Completion Status
 

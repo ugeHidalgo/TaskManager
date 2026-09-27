@@ -56,7 +56,7 @@ Weekly board structure:
   4.  Current week label/date range
   5.  Next week
   6.  Previous week
-- Top sections for recurring tasks and unscheduled tasks.
+- Unscheduled tasks remain in the shared-week section; date-range-generated tasks appear as ordinary cards in their day columns rather than in a separate recurring section.
 - Five day columns (Mon-Fri), with today emphasized on load.
 
 ## Voice and Tone
@@ -96,6 +96,9 @@ Quick add interactions:
 
 - Quick add task and quick add time entry are always accessible from board header.
 - Entry points should not open full-page navigations.
+- In New Task, show an unchecked `Recurring task` checkbox directly after Notes. When checked, reveal accessible Start date and End date date pickers below it, defaulted to the currently viewed week's Monday and Friday (workweek) or Sunday (full week).
+- With recurrence selected, show Placement as a read-only label of the viewed week; allow title, execution time, notes, and initial status to be set once for all generated days. With recurrence off, keep the ordinary selectable placement and single-task behavior.
+- On save, create independent ordinary day tasks for each inclusive date; provide count feedback. Edit, complete/reopen, and delete each task through its normal card; do not add daily checks or series-wide controls.
 
 ## State Patterns
 

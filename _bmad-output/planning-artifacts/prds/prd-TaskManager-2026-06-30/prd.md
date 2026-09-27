@@ -2,7 +2,7 @@
 title: "PRD - Task Manager"
 status: final
 created: "2026-06-30"
-updated: "2026-07-11"
+updated: "2026-09-27"
 ---
 
 # Product Requirements Document: Task Manager
@@ -43,10 +43,8 @@ Uge opens the app each morning via browser to check today's tasks and any carryo
 Uge sees a weekly kanban board:
 
 - **Columns:** Monday through Friday (5 columns).
-- **Top Section:** Above columns, three card areas:
-  - **Time Tracking Section:** Daily time entries for each day (entry/exit hours in hh:mm format). Multiple entry-exit pairs per day allowed.
-  - **Recurring Tasks:** Tasks that repeat across selected days (e.g., "Daily Standup" on Mon-Fri with checkboxes per day).
-  - **Unscheduled Tasks:** Tasks without a date, can be completed any time during the week.
+- **Top Section:** Above columns, time tracking (daily entry/exit pairs in hh:mm format) and unscheduled tasks (tasks without a day date).
+- **Recurring creation:** An option in New Task creates ordinary day tasks for a date range (e.g., "Daily Standup" Monday to Friday). Generated tasks appear in their respective day columns, not a separate recurring card area.
 - **Remote Work Indicator:** Each day column header includes a checkbox to mark whether Uge worked remotely that day.
 - **Today's Indicator:** Current day is visually highlighted.
 - **Week Navigation:** Board header shows current week date range (e.g., "June 30 - July 4, 2026") with "Previous Week" and "Next Week" buttons.
@@ -54,6 +52,7 @@ Uge sees a weekly kanban board:
   - Days with incomplete time entries (missing exit hour) are highlighted in red.
   - Days with no time entries show an error indicator.
 - Uge can navigate to previous or future weeks using navigation controls.
+- Full-week view additionally shows Saturday and Sunday; workweek view shows Monday through Friday.
 - Uge scans the board and checks email/calendar to identify new tasks and time entries.
 
 ### Phase 3: Task Creation & Updates
@@ -129,7 +128,7 @@ Tasks can be edited inline (name, description, status, date/time). Time entries 
 
 - Display a weekly kanban board (Mon-Fri columns).
 - Top section displays:
-  - Recurring tasks (with day-of-week checkboxes).
+  - Day tasks generated from date-range creation appear in their day columns; no separate recurring-task section or weekday checkboxes.
   - Unscheduled tasks (no date assigned).
 - Current day is highlighted.
 - Responsive layout that works on desktop browsers.
@@ -145,9 +144,10 @@ Tasks can be edited inline (name, description, status, date/time). Time entries 
 
 ### FR-4: Recurring Tasks
 
-- Recurring task creation: name, description, status, and selected days (e.g., Mon-Fri).
-- Display in "Recurring Tasks" section above columns with day checkboxes.
-- User can mark a recurring task as complete for a specific day.
+- In `New Task`, show an unchecked `Recurring task` checkbox directly below Notes. When unchecked, preserve normal single-task creation and selectable Placement.
+- When checked, show Start date and End date date pickers directly below the checkbox; default them to the Monday of the currently viewed board week and its Friday in workweek view or Sunday in full-week view. Show that viewed week in a read-only Placement field.
+- On save, create one independent ordinary day task for **every calendar day** in the inclusive chosen range (including weekends and dates across weeks), each with the same title, execution time, notes, and initial status. Validate dates and create the entire batch atomically; do not leave a partial set on error.
+- Generated tasks appear in their corresponding day columns when those days are visible, including weekend columns in full-week view. Edit, complete/reopen, and delete each individually using existing task flows; no series-level changes or separate daily checks.
 
 ### FR-5: Day Completion Tracking
 
@@ -175,7 +175,7 @@ Tasks can be edited inline (name, description, status, date/time). Time entries 
 - Board displays current week date range in the header (e.g., "June 30 - July 4, 2026").
 - "Previous Week" and "Next Week" navigation buttons allow user to view tasks from other weeks.
 - When navigating to a different week, the board updates to show tasks for that week's Mon-Fri.
-- Recurring tasks remain visible in all weeks.
+- Date-range-generated tasks appear only in the week containing each task's date; viewing other weeks does not generate more tasks.
 - Unscheduled tasks remain visible when viewing any week.
 - User can navigate to any past or future week without restrictions (MVP: no date limits).
 
@@ -269,7 +269,7 @@ Tasks can be edited inline (name, description, status, date/time). Time entries 
 - Multi-user collaboration (logged-in user only in MVP).
 - Mobile app (Android/iOS native apps; future phase).
 - Notifications and reminders (email/push).
-- Recurring task templates or smart suggestions.
+- Recurring task templates, ongoing recurrence rules, or smart suggestions.
 - Analytics or productivity metrics.
 - Team workspaces or shared task boards.
 - Time tracking or Pomodoro timer integration.
@@ -292,7 +292,7 @@ Tasks can be edited inline (name, description, status, date/time). Time entries 
 
 [ASSUMPTION] Drag & drop reordering will use a frontend library (e.g., React DnD or react-beautiful-dnd) and persist the new order via API on drop.
 
-[ASSUMPTION] "Recurring tasks" in MVP means tasks created once with day checkboxes, not automatic daily duplication. Future phases can add rule-based recurrence.
+[DECISION 2026-09-27] "Recurring tasks" in MVP means a one-time batch of independent ordinary day tasks for an inclusive start/end range. No recurring definitions, per-day check history, or future auto-generation after the end date.
 
 [ASSUMPTION] Time tracking uses 24-hour format (hh:mm, e.g., 09:00, 17:30) for entry/exit hours.
 

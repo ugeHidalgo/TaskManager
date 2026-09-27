@@ -145,9 +145,9 @@ Deferred Decisions (Post-MVP):
 - ORM: EF Core with code-first migrations.
 - Aggregate model:
   - `WeekPlan` identified by `week_start_date` (ISO date, Monday).
-  - `DayPlan` child records for Monday-Friday.
+  - `DayPlan` child records for Monday-Sunday; workweek view displays Monday-Friday, full-week view displays all seven days.
   - `Task` records linked to `DayPlan` (or unscheduled bucket in same week context).
-  - `RecurringTask` with selected weekdays and per-day completion flags.
+  - Date-range recurring creation is an atomic batch of ordinary `Task` records, each associated with its concrete date and containing Monday-based `WeekPlan`/`DayPlan`; no `RecurringTask` definition or separate daily-check table.
   - `TimeEntry` linked to `DayPlan` with `entry_hour` and nullable `exit_hour` (HH:mm).
   - `DayPlan.remote_worked` boolean for remote checkbox.
 - Ordering strategy: integer `order_index` with gap-friendly updates (reindex only when needed).
@@ -176,8 +176,7 @@ Deferred Decisions (Post-MVP):
   - `/auth`
   - `/weeks`
   - `/days`
-  - `/tasks`
-  - `/recurring-tasks`
+  - `/tasks` (including authenticated, atomic date-range batch creation for recurring tasks)
   - `/time-entries`
 - Response envelope:
   - Success: `{ "data": ..., "meta": ... }`
@@ -191,7 +190,7 @@ Deferred Decisions (Post-MVP):
 
 - Framework: React + Vite + TypeScript.
 - State approach:
-  - React Query for server state (weeks, tasks, time entries, recurring tasks).
+  - React Query for server state (weeks, tasks, time entries); recurring creation invalidates affected task/week queries.
   - Local component state for edit forms, drag interactions, and transient UI.
 - Routing: lightweight route structure (`/login`, `/board/:weekStartDate?`).
 - Drag/drop: maintained React drag-drop library with backend persistence on drop.
@@ -255,7 +254,7 @@ Database naming conventions:
 
 API naming conventions:
 
-- Route groups plural and kebab-case where needed (`/recurring-tasks`, `/time-entries`).
+- Route groups plural and kebab-case where needed (`/tasks`, `/time-entries`).
 - Route parameters use camelCase in API docs, serialized as URL path params (`/weeks/{weekStartDate}`).
 - Query parameters use camelCase.
 
@@ -373,7 +372,6 @@ TaskManager/
 │       │   ├── auth/
 │       │   ├── board/
 │       │   ├── tasks/
-│       │   ├── recurringTasks/
 │       │   ├── timeEntries/
 │       │   └── remoteWork/
 │       ├── shared/
@@ -430,7 +428,7 @@ Feature/FR mapping:
 
 - FR-1 (Auth) → `frontend/src/features/auth`, `backend/*/Auth*` modules.
 - FR-2/3 (Board + Task management) → `frontend/src/features/board|tasks`, `backend/*/Tasks*` and `DayPlan` services.
-- FR-4 (Recurring tasks) → `frontend/src/features/recurringTasks`, `backend/*/RecurringTasks*`.
+- FR-4 (Recurring tasks) → New Task date-range controls in `frontend/src/features/board|tasks` and atomic task batch creation in `backend/*/Tasks*`; reuse normal day-task CRUD.
 - FR-5/6 (Day/week completion) → board read model + backend completion evaluators.
 - FR-7 (Unsaved changes) → frontend form guard utilities in `shared/utils` + feature-level hooks.
 - FR-8 (Persistence) → infrastructure repositories + EF migrations.

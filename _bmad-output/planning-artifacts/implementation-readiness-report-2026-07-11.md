@@ -3,6 +3,8 @@
 **Date:** 2026-07-11
 **Project:** TaskManager
 
+> Historical snapshot (2026-07-11): FR4's recurring-section/day-checkbox conclusions below describe the requirements at the time of this assessment. Story 2.4 was redesigned on 2026-09-27 as a one-time date-range batch of independent day tasks; the current PRD, epic, architecture, UX, and Story 2.4 documents supersede those FR4 conclusions. This report has not been re-assessed for the new scope.
+
 ## Document Discovery
 
 ### Documents Used
