@@ -23,10 +23,10 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 
 1. Given a task has no fixed execution time, when it is created or loaded, then `ExecutionTime` is persisted and returned as an empty string.
 2. Given a task has a fixed execution time, when it is created or updated, then `ExecutionTime` is persisted and returned as an `hh:mm` string.
-3. Given a task card is rendered, when `ExecutionTime` is non-empty, then the time appears in the first row immediately before the task title.
+3. Given a task card is rendered for a day placement, when `ExecutionTime` is non-empty, then the time appears in the first row immediately before the task title.
 4. Given a task card is rendered, when `ExecutionTime` is empty, then no time text is shown and the title remains correctly positioned.
 5. Given a task card is rendered, when `ExecutionTime` is empty, then no execution-time text is displayed in the first row.
-6. Given a task card is rendered, when `ExecutionTime` is non-empty, then its value is displayed immediately before the task title in the first row and no clock control is displayed there.
+6. Given a task card is rendered for a day placement, when `ExecutionTime` is non-empty, then its value is displayed immediately before the task title in the first row and no clock control is displayed there.
 7. Given the user opens `Edit Task`, then the editor contains an `ExecutionTime` text field that is empty or contains the current `hh:mm` value.
 8. Given the `ExecutionTime` field is edited, then its increment and decrement controls move in 30-minute steps while manual entry is allowed when the final value is empty or valid `hh:mm`.
 9. Given the user accepts or closes `Edit Task` with a valid `ExecutionTime`, then the value is persisted, including an empty string, and the task card immediately reflects whether the time is visible or hidden.
@@ -36,6 +36,8 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 13. Given the `ExecutionTime` field contains an invalid value, when the error is shown in `Edit Task`, then the error message blinks for 15 seconds, remains fixed afterward, and stays visible until the value is corrected or cleared.
 14. Given the `ExecutionTime` increment or decrement control is used, when the next 30-minute step would fall outside `00:00`–`23:59`, then the value remains unchanged and never wraps or crosses either limit.
 15. Given the user manually enters a non-empty malformed value or a time outside `00:00`–`23:59`, when validation runs, then the field is marked invalid and displays: `Execution time must be empty or within the range 00:00 - 23:59.`
+16. Given a task has `Shared Week` placement, when it is created or updated, then its persisted `ExecutionTime` is set to `00:00` regardless of any previously configured execution time.
+17. Given a task has `Shared Week` placement, when its card is rendered, then no execution-time text is displayed even though its persisted `ExecutionTime` is `00:00`.
 
 ## Data Contract
 
@@ -44,6 +46,7 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 - Use `""` when no time is configured.
 - Use the exact `hh:mm` representation when a time is configured.
 - Accepted values are the empty string or a valid `hh:mm` value from `00:00` through `23:59`; the editor uses 30-minute step controls without crossing either boundary while allowing manual entry subject to the same validation.
+- `Shared Week` placement (`dayDate` is `null`) is an exception: persist `ExecutionTime` as `00:00` and suppress its display on the task card. Day placements retain the optional-time behavior above.
 
 ## Tasks / Subtasks
 
@@ -65,13 +68,20 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 
 ### Task 3 - Board presentation
 
-- [ ] Render a non-empty execution time immediately before the title in row one; do not render a clock control in row one.
-- [ ] Keep completed-card minimization, status controls, edit/delete controls, and shared-week/day layouts intact.
-- [ ] Ensure popup positioning and focus remain usable in workweek and full-week views.
+- [x] For day placements, render a non-empty execution time immediately before the title in row one; do not render a clock control in row one.
+- [x] Keep completed-card minimization, status controls, edit/delete controls, and shared-week/day layouts intact.
+- [x] Ensure popup positioning and focus remain usable in workweek and full-week views.
 
-### Task 4 - Tests and validation
+### Task 4 - Shared Week execution-time behavior
+
+- [ ] When a task is created or updated with `Shared Week` placement, set `ExecutionTime` to `00:00` before persistence, replacing any prior execution time.
+- [ ] Hide execution-time text on `Shared Week` task cards, including the stored `00:00` value; keep the existing display behavior for day placements.
+- [ ] Keep task placement, status/completion behavior, and the shared-week/day card layouts intact.
+
+### Task 5 - Tests and validation
 
 - [ ] Test empty and populated `ExecutionTime` persistence through create, update, reload, and board rendering.
+- [ ] Test that `Shared Week` create/update forces `ExecutionTime` to `00:00` and hides it on the card, while day placements retain optional-time display.
 - [ ] Test the `Edit Task` execution-time field, 30-minute controls, manual entry, accept, clear, cancel, keyboard access, and accessible naming.
 - [ ] Test invalid values and failed persistence rollback.
 - [ ] Run focused frontend/backend tests, lint, migration/build checks, and production builds.
@@ -88,6 +98,7 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 - Reuse the existing authenticated task update contract and `{ data, meta }` / `{ error }` envelopes.
 - Preserve authentication, week navigation, localStorage view mode, task placement, completion styling, and delete confirmation.
 - Treat `ExecutionTime` as a display and persistence field only; status remains independently controlled.
+- Treat `Shared Week` as `dayDate: null`; its `ExecutionTime` is forced to `00:00` and suppressed from the card display.
 
 ## References
 
@@ -101,6 +112,7 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 
 - [ ] `ExecutionTime` persists as empty string or valid `hh:mm` from `00:00` through `23:59`.
 - [ ] Task cards show the optional time before the title and no clock control appears in row one.
+- [ ] Shared-week tasks persist `ExecutionTime` as `00:00` and hide it from the task card; day tasks retain optional-time display.
 - [ ] `Edit Task` allows users to set, modify, clear, accept, or cancel an execution time.
 - [ ] The execution-time field supports 30-minute steps, valid manual `hh:mm` entry, accessible errors, and preserves existing card behavior.
 - [ ] Execution-time errors blink for 15 seconds and then remain visible in `Edit Task` until validation succeeds.
@@ -125,6 +137,9 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 - Carry the required `ExecutionTime` string through request/response contracts, task facade mappings, and frontend API types; keep status-only updates from dropping the current value.
 - Keep the editor input as text to allow manual `hh:mm` entry, use 30-minute controls that refuse out-of-range steps, and validate before save or dismissal.
 - Announce the validation error through an associated `role="alert"` / `aria-describedby`, blink for 15 seconds, then leave it static until the value is corrected or cleared.
+- Render a semantic `time` element before the title only for day placements with non-empty `ExecutionTime`; use shared task rendering for both shared-week and day cards.
+- Force `ExecutionTime` to `00:00` for `Shared Week` placement and suppress that value on the shared-week card.
+- Keep the editor backdrop fixed to the viewport, constrain and scroll the dialog within short viewports, and restore focus to the editor opener after cancel or save.
 
 ### Completion Notes List
 
@@ -132,8 +147,11 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 - Domain validation accepts empty or exact `hh:mm` values from `00:00` through `23:59`; update validation completes before mutating the task, so invalid times preserve prior values.
 - The completed Task 1 validation rejects `24:00`; Task 2 implements the matching editor boundary handling and inline error behavior.
 - Completed Task 2: API create/update/read contracts carry `ExecutionTime`, including empty values; editor preserves existing values, supports manual entry and bounded 30-minute steps, and blocks save/cancel/Escape while the value is invalid.
-- The exact accessible field error blinks for 15 seconds and remains visible until correction or clearing; Tasks 3–4 and story-wide Definition of Done remain incomplete, so the story remains `in-progress`.
+- The exact accessible field error blinks for 15 seconds and remains visible until correction or clearing; Tasks 3–5 and story-wide Definition of Done remain incomplete, so the story remains `in-progress`.
 - Visual follow-up: `Execution time` now appears between Title and Notes, with half-height up/down triangle controls stacked without a gap to its left.
+- Completed Task 3: day task cards show a non-empty execution time immediately before the title and render no time element when empty; no clock control is introduced in the title row.
+- Preserved shared/day rendering and existing completed-card/status/edit/delete behavior; constrained the editor dialog to the viewport and restored focus to its opener in workweek and full-week views.
+- Added BoardPage regression tests for populated/empty times and editor placement/focus across both views and both task contexts; frontend suite (53 tests), lint, and production build passed. Tasks 4–5 remain incomplete, so story status remains `in-progress`.
 
 ### File List
 
@@ -161,3 +179,5 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 - 2026-09-27: Tightened the accepted `ExecutionTime` range to `00:00`–`23:59` and specified editor boundary/error behavior.
 - 2026-09-27: Implemented and validated Task 2 API contracts, editor field, bounded controls, and accessible timed validation feedback.
 - 2026-09-27: Reordered the editor field and restyled its increment/decrement controls as a compact vertical arrow pair.
+- 2026-09-27: Implemented Task 3 board time presentation, viewport-safe editor positioning, and focus restoration; frontend tests, lint, and production build passed.
+- 2026-09-27: Added Task 4 for Shared Week execution-time normalization and display suppression; renumbered tests and validation as Task 5. No implementation performed.

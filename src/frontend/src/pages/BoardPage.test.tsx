@@ -257,6 +257,105 @@ describe("BoardPage week navigation", () => {
     ).not.toBeChecked();
   });
 
+  it.each(["workweek", "fullweek"] as const)(
+    "renders execution time before the title without a clock control in %s view",
+    async (viewMode) => {
+      window.localStorage.setItem("taskmanager.boardViewMode", viewMode);
+      const monday = formatDateOnly(getWeekRange(new Date()).weekStart);
+      const timedTask = makeTask(
+        "timed-task",
+        "Timed shared task",
+        null,
+        "Not Started",
+        "09:30",
+      );
+      const untimedTask = makeTask(
+        "untimed-task",
+        "Untimed Monday task",
+        monday,
+      );
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+        buildBoardResponseFromUrl(String(input), [timedTask, untimedTask]),
+      );
+
+      render(
+        <MemoryRouter>
+          <BoardPage />
+        </MemoryRouter>,
+      );
+
+      const timedTitle = await screen.findByText("Timed shared task");
+      const timedRow = timedTitle.closest(".task-title-row") as HTMLElement;
+      expect(
+        Array.from(timedRow.children).map((child) => child.textContent),
+      ).toEqual(["09:30", "Timed shared task"]);
+      expect(timedRow.querySelector(".task-execution-time")).toHaveTextContent(
+        "09:30",
+      );
+      expect(within(timedRow).queryByRole("button")).toBeNull();
+
+      const untimedTitle = await screen.findByText("Untimed Monday task");
+      const untimedRow = untimedTitle.closest(".task-title-row") as HTMLElement;
+      expect(Array.from(untimedRow.children)).toEqual([untimedTitle]);
+      expect(untimedRow.querySelector(".task-execution-time")).toBeNull();
+    },
+  );
+
+  it.each([
+    ["workweek", "shared"],
+    ["workweek", "day"],
+    ["fullweek", "shared"],
+    ["fullweek", "day"],
+  ] as const)(
+    "keeps the task editor positioned and keyboard focus usable in %s %s context",
+    async (viewMode, placement) => {
+      const user = userEvent.setup();
+      window.localStorage.setItem("taskmanager.boardViewMode", viewMode);
+      const monday = formatDateOnly(getWeekRange(new Date()).weekStart);
+      const task = makeTask(
+        "focus-task",
+        "Task to edit",
+        placement === "day" ? monday : null,
+        "Not Started",
+        "09:00",
+      );
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+        buildBoardResponseFromUrl(String(input), [task]),
+      );
+
+      render(
+        <MemoryRouter>
+          <BoardPage />
+        </MemoryRouter>,
+      );
+
+      const trigger = await screen.findByRole("button", {
+        name: "Task 1: Edit task: Task to edit",
+      });
+      await user.click(trigger);
+
+      const dialog = screen.getByRole("dialog", { name: "Edit task" });
+      const titleInput = screen.getByLabelText("Title");
+      expect(titleInput).toHaveFocus();
+      const backdrop = dialog.closest(".task-editor-backdrop");
+      expect(backdrop).not.toBeNull();
+      expect(backdrop?.parentElement).toBe(
+        document.querySelector("main.screen"),
+      );
+
+      await waitFor(() => {
+        expect(titleInput).toHaveFocus();
+      });
+      await user.click(screen.getByRole("button", { name: "Cancel" }));
+      await waitFor(() => {
+        expect(trigger).toHaveFocus();
+      });
+      expect(
+        trigger.closest(placement === "day" ? ".day-column" : ".week-section"),
+      ).not.toBeNull();
+    },
+  );
+
   it("cycles task status with the keyboard and persists each status", async () => {
     const user = userEvent.setup();
     const task = makeTask(

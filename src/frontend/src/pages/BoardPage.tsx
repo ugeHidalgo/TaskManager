@@ -51,6 +51,7 @@ export function BoardPage() {
   );
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editorTask, setEditorTask] = useState<TaskPayload | undefined>();
+  const [editorOpener, setEditorOpener] = useState<HTMLElement | null>(null);
   const [editorDayDate, setEditorDayDate] = useState<Date | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -149,12 +150,30 @@ export function BoardPage() {
   }
 
   function openTaskEditor(dayDate: Date | null, task?: TaskPayload) {
+    setEditorOpener(
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null,
+    );
     setIsEditorOpen(true);
     setEditorTask(task);
     setEditorDayDate(dayDate);
     setEditorError(null);
     setSaveMessage(null);
     setStatusMessagePhase(null);
+  }
+
+  function closeTaskEditor() {
+    setIsEditorOpen(false);
+    setEditorTask(undefined);
+    if (editorOpener) {
+      window.requestAnimationFrame(() => {
+        if (editorOpener.isConnected) {
+          editorOpener.focus();
+        }
+      });
+    }
+    setEditorOpener(null);
   }
 
   async function handleTaskSave(input: SaveTaskInput) {
@@ -174,8 +193,7 @@ export function BoardPage() {
 
       const refreshedTasks = await getTasksForWeek(token, weekStart);
       setTasks(refreshedTasks);
-      setIsEditorOpen(false);
-      setEditorTask(undefined);
+      closeTaskEditor();
       setSaveMessage(editorTask ? "Task updated." : "Task created.");
       setStatusMessagePhase(null);
     } catch (error) {
@@ -376,10 +394,7 @@ export function BoardPage() {
           task={editorTask}
           isSaving={isSaving}
           errorMessage={editorError}
-          onCancel={() => {
-            setIsEditorOpen(false);
-            setEditorTask(undefined);
-          }}
+          onCancel={closeTaskEditor}
           onSave={handleTaskSave}
         />
       ) : null}
@@ -416,6 +431,14 @@ function renderTasks(
       >
         <div className="task-content">
           <div className="task-title-row">
+            {task.executionTime ? (
+              <time
+                className="task-execution-time"
+                dateTime={task.executionTime}
+              >
+                {task.executionTime}
+              </time>
+            ) : null}
             <strong
               className={`task-title${isCompleted ? " task-title-completed" : ""}`}
             >

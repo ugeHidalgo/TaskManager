@@ -168,6 +168,7 @@
 .task-title-row {
   display: flex;
   align-items: center;
+  gap: 0.35rem;
   min-width: 0;
 }
 
@@ -195,9 +196,19 @@
 }
 
 .task-title {
+  min-width: 0;
   font-size: 0.9rem;
   color: #1f2937;
   text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.task-execution-time {
+  flex: 0 0 auto;
+  color: #6b7280;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .task-title-completed {
@@ -244,6 +255,10 @@
 .task-editor {
   width: min(100%, 30rem);
   max-width: 30rem;
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 1.25rem;
   border: 1px solid #d9e1ec;
   border-radius: 0.5rem;
