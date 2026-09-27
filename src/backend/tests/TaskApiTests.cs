@@ -22,7 +22,8 @@ public sealed class TaskApiTests
             "  Prepare release  ",
             new DateOnly(2026, 8, 21),
             "Review checklist",
-            null);
+            null,
+            "09:30");
 
         var createResult = await facade.CreateTaskAsync(
             context,
@@ -34,6 +35,8 @@ public sealed class TaskApiTests
         Assert.Equal(StatusCodes.Status201Created, createResponse.StatusCode);
         Assert.Equal("Not Started", createResponse.Body.RootElement
             .GetProperty("Data").GetProperty("Status").GetString());
+        Assert.Equal("09:30", createResponse.Body.RootElement
+            .GetProperty("Data").GetProperty("ExecutionTime").GetString());
 
         context.Request.QueryString = new QueryString("?weekStartDate=2026-08-21");
         var getResult = await facade.GetTasksAsync(context, dbContext, CancellationToken.None);
@@ -43,6 +46,25 @@ public sealed class TaskApiTests
         Assert.Single(tasks);
         Assert.Equal("Prepare release", tasks[0].GetProperty("Title").GetString());
         Assert.Equal("2026-08-21", tasks[0].GetProperty("DayDate").GetString());
+        Assert.Equal("09:30", tasks[0].GetProperty("ExecutionTime").GetString());
+    }
+
+    [Fact]
+    public async Task CreateTaskAsync_PersistsEmptyExecutionTime()
+    {
+        var context = CreateContext();
+        await using var dbContext = CreateDbContext();
+
+        var result = await facade.CreateTaskAsync(
+            context,
+            new CreateTaskRequest(new DateOnly(2026, 8, 17), "Flexible task", null, null, null, string.Empty),
+            dbContext,
+            CancellationToken.None);
+        var response = ToResponse(result);
+
+        Assert.Equal(StatusCodes.Status201Created, response.StatusCode);
+        Assert.Equal(string.Empty, response.Body.RootElement
+            .GetProperty("Data").GetProperty("ExecutionTime").GetString());
     }
 
     [Fact]
@@ -67,7 +89,8 @@ public sealed class TaskApiTests
                 "Final plan",
                 null,
                 "Ready",
-                "In Progress"),
+                "In Progress",
+                "10:30"),
             dbContext,
             CancellationToken.None);
         var response = ToResponse(result);
@@ -75,6 +98,20 @@ public sealed class TaskApiTests
         Assert.Equal(StatusCodes.Status200OK, response.StatusCode);
         Assert.Equal("Final plan", response.Body.RootElement.GetProperty("Data").GetProperty("Title").GetString());
         Assert.Equal("In Progress", response.Body.RootElement.GetProperty("Data").GetProperty("Status").GetString());
+        Assert.Equal("10:30", response.Body.RootElement.GetProperty("Data").GetProperty("ExecutionTime").GetString());
+
+        var clearResult = await facade.UpdateTaskAsync(
+            task.Id,
+            context,
+            new UpdateTaskRequest(new DateOnly(2026, 8, 17), "Final plan", null, "Ready", "In Progress", string.Empty),
+            dbContext,
+            CancellationToken.None);
+        var clearResponse = ToResponse(clearResult);
+
+        Assert.Equal(StatusCodes.Status200OK, clearResponse.StatusCode);
+        Assert.Equal(string.Empty, clearResponse.Body.RootElement
+            .GetProperty("Data").GetProperty("ExecutionTime").GetString());
+        Assert.Equal(string.Empty, (await dbContext.Tasks.SingleAsync()).ExecutionTime);
     }
 
     [Theory]
@@ -101,7 +138,8 @@ public sealed class TaskApiTests
             weekStartDate,
             "Target task",
             dayDate,
-            "Target notes");
+            "Target notes",
+            executionTime: "08:30");
         var lastTask = TaskManager.Domain.Board.TaskItem.Create(
             workspace.Id,
             weekStartDate,
@@ -137,13 +175,15 @@ public sealed class TaskApiTests
                         "Target task",
                         dayDate,
                         "Target notes",
-                        status),
+                        status,
+                        task.ExecutionTime),
                     updateContext,
                     CancellationToken.None);
                 var response = ToResponse(result);
 
                 Assert.Equal(StatusCodes.Status200OK, response.StatusCode);
                 Assert.Equal(status, response.Body.RootElement.GetProperty("Data").GetProperty("Status").GetString());
+                Assert.Equal("08:30", response.Body.RootElement.GetProperty("Data").GetProperty("ExecutionTime").GetString());
             }
 
             context.Request.QueryString = new QueryString("?weekStartDate=2026-08-17");
@@ -160,6 +200,7 @@ public sealed class TaskApiTests
             Assert.Equal(status, reloadedTask.GetProperty("Status").GetString());
             Assert.Equal("Target task", reloadedTask.GetProperty("Title").GetString());
             Assert.Equal("Target notes", reloadedTask.GetProperty("Notes").GetString());
+            Assert.Equal("08:30", reloadedTask.GetProperty("ExecutionTime").GetString());
             Assert.Equal(taskCreatedAt, reloadedTask.GetProperty("CreatedAtUtc").GetDateTime());
         }
     }
@@ -172,7 +213,7 @@ public sealed class TaskApiTests
 
         var result = await facade.CreateTaskAsync(
             context,
-            new CreateTaskRequest(new DateOnly(2026, 8, 17), "  ", null, null, null),
+            new CreateTaskRequest(new DateOnly(2026, 8, 17), "  ", null, null, null, string.Empty),
             dbContext,
             CancellationToken.None);
         var response = ToResponse(result);
@@ -199,13 +240,46 @@ public sealed class TaskApiTests
         var result = await facade.UpdateTaskAsync(
             task.Id,
             context,
-            new UpdateTaskRequest(new DateOnly(2026, 8, 24), "Changed", null, null, null),
+            new UpdateTaskRequest(new DateOnly(2026, 8, 24), "Changed", null, null, null, string.Empty),
             dbContext,
             CancellationToken.None);
         var response = ToResponse(result);
 
         Assert.Equal(StatusCodes.Status404NotFound, response.StatusCode);
         Assert.Equal("task.not_found", response.Body.RootElement.GetProperty("Error").GetProperty("Code").GetString());
+    }
+
+    [Fact]
+    public async Task UpdateTaskAsync_RejectsInvalidExecutionTime_WithoutChangingPersistedValue()
+    {
+        var weekStartDate = new DateOnly(2026, 8, 17);
+        var context = CreateContext();
+        await using var dbContext = CreateDbContext();
+        var workspace = TaskManager.Domain.Board.WeekWorkspace.Create(weekStartDate);
+        var task = TaskManager.Domain.Board.TaskItem.Create(
+            workspace.Id,
+            weekStartDate,
+            "Plan sprint",
+            executionTime: "09:30");
+        dbContext.WeekWorkspaces.Add(workspace);
+        dbContext.Tasks.Add(task);
+        await dbContext.SaveChangesAsync();
+
+        var result = await facade.UpdateTaskAsync(
+            task.Id,
+            context,
+            new UpdateTaskRequest(weekStartDate, "Changed title", null, null, "In Progress", "24:00"),
+            dbContext,
+            CancellationToken.None);
+        var response = ToResponse(result);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
+        Assert.StartsWith(
+            "Execution time must be empty or within the range 00:00 - 23:59.",
+            response.Body.RootElement.GetProperty("Error").GetProperty("Message").GetString());
+        Assert.Equal("Plan sprint", task.Title);
+        Assert.Equal("09:30", task.ExecutionTime);
+        Assert.Equal("09:30", (await dbContext.Tasks.SingleAsync()).ExecutionTime);
     }
 
     [Fact]

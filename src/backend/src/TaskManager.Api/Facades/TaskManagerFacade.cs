@@ -145,7 +145,8 @@ public sealed class TaskManagerFacade
                 request.Title,
                 request.DayDate,
                 request.Notes,
-                request.Status);
+                request.Status,
+                request.ExecutionTime);
 
             dbContext.Tasks.Add(task);
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -194,7 +195,8 @@ public sealed class TaskManagerFacade
                 request.Title,
                 request.DayDate,
                 request.Notes,
-                request.Status);
+                request.Status,
+                request.ExecutionTime);
             await dbContext.SaveChangesAsync(cancellationToken);
 
             return Results.Ok(ApiSuccessResponse<TaskResponse>.Create(
@@ -264,6 +266,7 @@ public sealed class TaskManagerFacade
             task.Title,
             task.Notes,
             task.Status,
+            task.ExecutionTime,
             task.CreatedAtUtc,
             task.UpdatedAtUtc);
     }

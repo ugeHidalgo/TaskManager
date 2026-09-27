@@ -66,6 +66,7 @@ function makeTask(
   title: string,
   dayDate: string | null,
   status = "Not Started",
+  executionTime = "",
 ) {
   return {
     id,
@@ -74,6 +75,7 @@ function makeTask(
     title,
     notes: null,
     status,
+    executionTime,
     createdAtUtc: "2026-08-26T10:00:00Z",
     updatedAtUtc: "2026-08-26T10:00:00Z",
   };
@@ -257,15 +259,26 @@ describe("BoardPage week navigation", () => {
 
   it("cycles task status with the keyboard and persists each status", async () => {
     const user = userEvent.setup();
-    const task = makeTask("keyboard-task", "Keyboard task", null);
+    const task = makeTask(
+      "keyboard-task",
+      "Keyboard task",
+      null,
+      "Not Started",
+      "09:30",
+    );
     let storedTasks = [task];
     const savedStatuses: string[] = [];
+    const savedExecutionTimes: string[] = [];
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = new URL(String(input));
       if (init?.method === "PUT") {
-        const body = JSON.parse(String(init.body)) as { status: string };
+        const body = JSON.parse(String(init.body)) as {
+          status: string;
+          executionTime: string;
+        };
         savedStatuses.push(body.status);
+        savedExecutionTimes.push(body.executionTime);
         storedTasks = storedTasks.map((storedTask) => ({
           ...storedTask,
           status: body.status,
@@ -324,6 +337,7 @@ describe("BoardPage week navigation", () => {
     await waitFor(() => expect(reopenedCheckbox).not.toBeChecked());
     expect(screen.getByRole("status")).toHaveTextContent("Task reopened.");
     expect(savedStatuses).toEqual(["In Progress", "Completed", "Not Started"]);
+    expect(savedExecutionTimes).toEqual(["09:30", "09:30", "09:30"]);
     expect(storedTasks[0].status).toBe("Not Started");
   });
 
@@ -837,15 +851,21 @@ describe("BoardPage week navigation", () => {
       title: "Old title",
       notes: "Existing notes",
       status: "Not Started",
+      executionTime: "13:45",
       createdAtUtc: "2026-08-26T10:00:00Z",
       updatedAtUtc: "2026-08-26T10:00:00Z",
     };
     let saveFailed = false;
+    const savedExecutionTimes: string[] = [];
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = new URL(String(input));
       if (url.pathname.endsWith("/tasks")) {
         return new Response(JSON.stringify({ data: [task] }), { status: 200 });
+      }
+      if (init?.method === "PUT") {
+        const body = JSON.parse(String(init.body)) as { executionTime: string };
+        savedExecutionTimes.push(body.executionTime);
       }
       if (init?.method === "PUT" && !saveFailed) {
         saveFailed = true;
@@ -882,6 +902,7 @@ describe("BoardPage week navigation", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
+    expect(savedExecutionTimes).toEqual(["13:45", "13:45"]);
     expect(screen.getByRole("status")).toHaveTextContent("Task updated.");
   });
 

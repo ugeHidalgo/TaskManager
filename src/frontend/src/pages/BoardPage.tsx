@@ -201,6 +201,7 @@ export function BoardPage() {
         dayDate: task.dayDate,
         notes: task.notes,
         status: nextStatus,
+        executionTime: task.executionTime ?? "",
       });
       setTasks((currentTasks) =>
         currentTasks.map((currentTask) =>

@@ -74,6 +74,7 @@ describe("board api", () => {
       dayDate: null,
       notes: "Review checklist",
       status: "Not Started",
+      executionTime: "",
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -90,6 +91,7 @@ describe("board api", () => {
           dayDate: null,
           notes: "Review checklist",
           status: "Not Started",
+          executionTime: "",
         }),
       }),
     );
@@ -112,12 +114,23 @@ describe("board api", () => {
         dayDate: "2026-08-04",
         notes: null,
         status: "In Progress",
+        executionTime: "13:30",
       }),
     ).rejects.toThrow("Title is required.");
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/tasks\/task-id$/),
-      expect.objectContaining({ method: "PUT" }),
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          weekStartDate: "2026-08-03",
+          title: "Updated title",
+          dayDate: "2026-08-04",
+          notes: null,
+          status: "In Progress",
+          executionTime: "13:30",
+        }),
+      }),
     );
   });
 });

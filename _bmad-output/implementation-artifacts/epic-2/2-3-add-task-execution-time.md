@@ -56,12 +56,12 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 
 ### Task 2 - Authenticated API and editor
 
-- [ ] Extend task create, update, and response contracts with `ExecutionTime`.
-- [ ] Preserve the value through task creation and editing, including the empty-string case.
-- [ ] Add an `ExecutionTime` text field to the existing `Edit Task` window, initialized with the current value or an empty string.
-- [ ] Support 30-minute increment/decrement controls that stay within `00:00`–`23:59`, manual editing, clear-by-empty-value, accept, cancel, and keyboard interaction.
-- [ ] Keep the editor open and show `Execution time must be empty or within the range 00:00 - 23:59.` when the value is neither empty nor valid `hh:mm` within that range.
-- [ ] Make the `ExecutionTime` validation error blink for 15 seconds, then remain fixed in `Edit Task` until the value is corrected or cleared.
+- [x] Extend task create, update, and response contracts with `ExecutionTime`.
+- [x] Preserve the value through task creation and editing, including the empty-string case.
+- [x] Add an `ExecutionTime` text field to the existing `Edit Task` window, initialized with the current value or an empty string.
+- [x] Support 30-minute increment/decrement controls that stay within `00:00`–`23:59`, manual editing, clear-by-empty-value, accept, cancel, and keyboard interaction.
+- [x] Keep the editor open and show `Execution time must be empty or within the range 00:00 - 23:59.` when the value is neither empty nor valid `hh:mm` within that range.
+- [x] Make the `ExecutionTime` validation error blink for 15 seconds, then remain fixed in `Edit Task` until the value is corrected or cleared.
 
 ### Task 3 - Board presentation
 
@@ -116,25 +116,48 @@ so that tasks with a fixed start time are clearly scheduled while flexible tasks
 - `dotnet tool run dotnet-ef migrations has-pending-model-changes ...` — no pending model changes.
 - `dotnet test TaskManager.sln` — passed (37 tests); migration applied by the PostgreSQL integration test.
 - After tightening the range to `00:00`–`23:59`, `dotnet test TaskManager.sln` passed (39 tests); no EF model changes are pending.
+- `dotnet test src/backend/tests/Taskmanager.Tests.csproj --filter FullyQualifiedName~TaskApiTests` — passed (10 tests).
+- `dotnet test TaskManager.sln` after Task 2 — passed (41 tests).
+- `npm run test:run` — passed (46 tests); `npm run lint` and `npm run build` passed.
+
+### Implementation Plan
+
+- Carry the required `ExecutionTime` string through request/response contracts, task facade mappings, and frontend API types; keep status-only updates from dropping the current value.
+- Keep the editor input as text to allow manual `hh:mm` entry, use 30-minute controls that refuse out-of-range steps, and validate before save or dismissal.
+- Announce the validation error through an associated `role="alert"` / `aria-describedby`, blink for 15 seconds, then leave it static until the value is corrected or cleared.
 
 ### Completion Notes List
 
 - Completed Task 1 only: added `ExecutionTime` with an empty-string default, required PostgreSQL mapping/default, and migration backfill for existing rows.
 - Domain validation accepts empty or exact `hh:mm` values from `00:00` through `23:59`; update validation completes before mutating the task, so invalid times preserve prior values.
-- The completed Task 1 validation was updated to reject `24:00`; increment/decrement boundary handling and the inline editor error remain Task 2 work.
-- Tasks 2–4 and story-wide Definition of Done remain incomplete; story remains `in-progress`.
+- The completed Task 1 validation rejects `24:00`; Task 2 implements the matching editor boundary handling and inline error behavior.
+- Completed Task 2: API create/update/read contracts carry `ExecutionTime`, including empty values; editor preserves existing values, supports manual entry and bounded 30-minute steps, and blocks save/cancel/Escape while the value is invalid.
+- The exact accessible field error blinks for 15 seconds and remains visible until correction or clearing; Tasks 3–4 and story-wide Definition of Done remain incomplete, so the story remains `in-progress`.
+- Visual follow-up: `Execution time` now appears between Title and Notes, with half-height up/down triangle controls stacked without a gap to its left.
 
 ### File List
 
 - `src/backend/src/TaskManager.Domain/Board/TaskItem.cs`
+- `src/backend/src/TaskManager.Api/Contracts/TaskContracts.cs`
+- `src/backend/src/TaskManager.Api/Facades/TaskManagerFacade.cs`
 - `src/backend/src/TaskManager.Infrastructure/Persistence/Configurations/TaskItemConfiguration.cs`
 - `src/backend/src/TaskManager.Infrastructure/Persistence/Migrations/20260927053011_AddTaskExecutionTime.cs`
 - `src/backend/src/TaskManager.Infrastructure/Persistence/Migrations/20260927053011_AddTaskExecutionTime.Designer.cs`
 - `src/backend/src/TaskManager.Infrastructure/Persistence/Migrations/TaskManagerDbContextModelSnapshot.cs`
 - `src/backend/tests/TaskItemTests.cs`
 - `src/backend/tests/TaskItemPersistenceTests.cs`
+- `src/backend/tests/TaskApiTests.cs`
+- `src/frontend/src/api/board.ts`
+- `src/frontend/src/api/board.test.ts`
+- `src/frontend/src/features/board/components/TaskEditor.tsx`
+- `src/frontend/src/features/board/components/TaskEditor.test.tsx`
+- `src/frontend/src/features/board/styles/board-layout.css`
+- `src/frontend/src/pages/BoardPage.tsx`
+- `src/frontend/src/pages/BoardPage.test.tsx`
 
 ### Change Log
 
 - 2026-09-27: Implemented and validated Task 1 of Story 2.3.
 - 2026-09-27: Tightened the accepted `ExecutionTime` range to `00:00`–`23:59` and specified editor boundary/error behavior.
+- 2026-09-27: Implemented and validated Task 2 API contracts, editor field, bounded controls, and accessible timed validation feedback.
+- 2026-09-27: Reordered the editor field and restyled its increment/decrement controls as a compact vertical arrow pair.

@@ -23,6 +23,7 @@ export interface TaskPayload {
   title: string;
   notes: string | null;
   status: string;
+  executionTime: string;
   createdAtUtc: string;
   updatedAtUtc: string;
 }
@@ -33,6 +34,7 @@ export interface SaveTaskInput {
   dayDate: string | null;
   notes: string | null;
   status: string;
+  executionTime: string;
 }
 
 export function formatDateOnly(value: Date): string {

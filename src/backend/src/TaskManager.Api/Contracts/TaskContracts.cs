@@ -5,14 +5,16 @@ public sealed record CreateTaskRequest(
     string Title,
     DateOnly? DayDate,
     string? Notes,
-    string? Status);
+    string? Status,
+    string ExecutionTime);
 
 public sealed record UpdateTaskRequest(
     DateOnly WeekStartDate,
     string Title,
     DateOnly? DayDate,
     string? Notes,
-    string? Status);
+    string? Status,
+    string ExecutionTime);
 
 public sealed record TaskResponse(
     Guid Id,
@@ -21,5 +23,6 @@ public sealed record TaskResponse(
     string Title,
     string? Notes,
     string Status,
+    string ExecutionTime,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);
