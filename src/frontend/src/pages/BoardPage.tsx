@@ -431,7 +431,7 @@ function renderTasks(
       >
         <div className="task-content">
           <div className="task-title-row">
-            {task.executionTime ? (
+            {task.dayDate !== null && task.executionTime ? (
               <time
                 className="task-execution-time"
                 dateTime={task.executionTime}

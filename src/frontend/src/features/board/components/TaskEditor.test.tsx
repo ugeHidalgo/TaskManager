@@ -22,13 +22,16 @@ function makeTask(executionTime: string): TaskPayload {
   };
 }
 
-function renderEditor(task?: TaskPayload) {
+function renderEditor(
+  task?: TaskPayload,
+  initialDayDate: Date | null = weekStart,
+) {
   const onCancel = vi.fn();
   const onSave = vi.fn();
   const { container } = render(
     <TaskEditor
       weekStart={weekStart}
-      initialDayDate={null}
+      initialDayDate={initialDayDate}
       task={task}
       isSaving={false}
       errorMessage={null}
@@ -45,6 +48,70 @@ afterEach(() => {
 });
 
 describe("TaskEditor execution time", () => {
+  it("hides execution time on a new shared-week task and submits an empty value", async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor(undefined, null);
+
+    expect(
+      screen.getByRole("dialog", { name: "New task" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "Execution time" }),
+    ).not.toBeInTheDocument();
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Title" }),
+      "Shared task",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ dayDate: null, executionTime: "" }),
+    );
+  });
+
+  it("hides execution time when editing an existing shared-week task", async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor(makeTask("10:00"), null);
+
+    expect(
+      screen.getByRole("dialog", { name: "Edit task" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "Execution time" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ dayDate: null, executionTime: "" }),
+    );
+  });
+
+  it("hides execution time while the task is in shared-week placement", async () => {
+    const user = userEvent.setup();
+    renderEditor(makeTask("10:00"), null);
+
+    expect(
+      screen.queryByRole("textbox", { name: "Execution time" }),
+    ).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Placement"), "2026-08-17");
+
+    expect(
+      screen.getByRole("textbox", { name: "Execution time" }),
+    ).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Placement"), "");
+
+    expect(
+      screen.queryByRole("textbox", { name: "Execution time" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Optional, from 00:00 to 23:59."),
+    ).not.toBeInTheDocument();
+  });
+
   it("places Execution time between Title and Notes with vertically stacked arrows", () => {
     const { container } = renderEditor();
     const labels = Array.from(

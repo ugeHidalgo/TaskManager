@@ -128,7 +128,7 @@ export function TaskEditor({
     if (isSaving) {
       return;
     }
-    if (!isValidExecutionTime(executionTime)) {
+    if (dayDate && !isValidExecutionTime(executionTime)) {
       showExecutionTimeError();
       return;
     }
@@ -153,7 +153,10 @@ export function TaskEditor({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!isValidExecutionTime(executionTime)) {
+    const isSharedWeekPlacement = !dayDate;
+    const normalizedExecutionTime = isSharedWeekPlacement ? "" : executionTime;
+
+    if (!isSharedWeekPlacement && !isValidExecutionTime(executionTime)) {
       showExecutionTimeError();
       return;
     }
@@ -170,9 +173,11 @@ export function TaskEditor({
       dayDate: dayDate || null,
       notes: notes.trim() || null,
       status,
-      executionTime,
+      executionTime: normalizedExecutionTime,
     });
   }
+
+  const isSharedWeekPlacement = !dayDate;
 
   return (
     <div className="task-editor-backdrop" role="presentation">
@@ -202,68 +207,76 @@ export function TaskEditor({
             }
           />
 
-          <label htmlFor="task-execution-time">Execution time</label>
-          <div
-            className="execution-time-controls"
-            role="group"
-            aria-label="Execution time controls"
-          >
-            <button
-              type="button"
-              className="execution-time-step-button execution-time-step-button--increase"
-              aria-label="Increase execution time by 30 minutes"
-              aria-controls="task-execution-time"
-              disabled={isSaving || !canStepExecutionTime(executionTime, 30)}
-              onClick={() => handleExecutionTimeStep(30)}
-            >
-              ▲
-            </button>
-            <input
-              id="task-execution-time"
-              type="text"
-              inputMode="text"
-              autoComplete="off"
-              value={executionTime}
-              onChange={(event) =>
-                handleExecutionTimeChange(event.target.value)
-              }
-              aria-invalid={executionTimeError ? true : undefined}
-              aria-describedby={
-                executionTimeError
-                  ? "execution-time-error"
-                  : "execution-time-hint"
-              }
-              aria-errormessage={
-                executionTimeError ? "execution-time-error" : undefined
-              }
-            />
-            <button
-              type="button"
-              className="execution-time-step-button execution-time-step-button--decrease"
-              aria-label="Decrease execution time by 30 minutes"
-              aria-controls="task-execution-time"
-              disabled={isSaving || !canStepExecutionTime(executionTime, -30)}
-              onClick={() => handleExecutionTimeStep(-30)}
-            >
-              ▼
-            </button>
-          </div>
-          <p id="execution-time-hint" className="execution-time-hint">
-            Optional, from 00:00 to 23:59.
-          </p>
-          {executionTimeError ? (
-            <p
-              id="execution-time-error"
-              className={`error execution-time-error${
-                isExecutionTimeErrorBlinking
-                  ? " execution-time-error--blinking"
-                  : ""
-              }`}
-              role="alert"
-              aria-live="assertive"
-            >
-              {executionTimeError}
-            </p>
+          {!isSharedWeekPlacement ? (
+            <>
+              <label htmlFor="task-execution-time">Execution time</label>
+              <div
+                className="execution-time-controls"
+                role="group"
+                aria-label="Execution time controls"
+              >
+                <button
+                  type="button"
+                  className="execution-time-step-button execution-time-step-button--increase"
+                  aria-label="Increase execution time by 30 minutes"
+                  aria-controls="task-execution-time"
+                  disabled={
+                    isSaving || !canStepExecutionTime(executionTime, 30)
+                  }
+                  onClick={() => handleExecutionTimeStep(30)}
+                >
+                  ▲
+                </button>
+                <input
+                  id="task-execution-time"
+                  type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  value={executionTime}
+                  onChange={(event) =>
+                    handleExecutionTimeChange(event.target.value)
+                  }
+                  aria-invalid={executionTimeError ? true : undefined}
+                  aria-describedby={
+                    executionTimeError
+                      ? "execution-time-error"
+                      : "execution-time-hint"
+                  }
+                  aria-errormessage={
+                    executionTimeError ? "execution-time-error" : undefined
+                  }
+                />
+                <button
+                  type="button"
+                  className="execution-time-step-button execution-time-step-button--decrease"
+                  aria-label="Decrease execution time by 30 minutes"
+                  aria-controls="task-execution-time"
+                  disabled={
+                    isSaving || !canStepExecutionTime(executionTime, -30)
+                  }
+                  onClick={() => handleExecutionTimeStep(-30)}
+                >
+                  ▼
+                </button>
+              </div>
+              <p id="execution-time-hint" className="execution-time-hint">
+                Optional, from 00:00 to 23:59.
+              </p>
+              {executionTimeError ? (
+                <p
+                  id="execution-time-error"
+                  className={`error execution-time-error${
+                    isExecutionTimeErrorBlinking
+                      ? " execution-time-error--blinking"
+                      : ""
+                  }`}
+                  role="alert"
+                  aria-live="assertive"
+                >
+                  {executionTimeError}
+                </p>
+              ) : null}
+            </>
           ) : null}
 
           <label htmlFor="task-notes">Notes</label>

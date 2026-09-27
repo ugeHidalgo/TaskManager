@@ -68,6 +68,25 @@ public sealed class TaskApiTests
     }
 
     [Fact]
+    public async Task CreateTaskAsync_ClearsExecutionTimeForSharedWeekPlacement()
+    {
+        var context = CreateContext();
+        await using var dbContext = CreateDbContext();
+
+        var result = await facade.CreateTaskAsync(
+            context,
+            new CreateTaskRequest(new DateOnly(2026, 8, 17), "Shared task", null, null, null, "09:30"),
+            dbContext,
+            CancellationToken.None);
+        var response = ToResponse(result);
+
+        Assert.Equal(StatusCodes.Status201Created, response.StatusCode);
+        Assert.Equal(string.Empty, response.Body.RootElement
+            .GetProperty("Data").GetProperty("ExecutionTime").GetString());
+        Assert.Equal(string.Empty, (await dbContext.Tasks.SingleAsync()).ExecutionTime);
+    }
+
+    [Fact]
     public async Task UpdateTaskAsync_UpdatesTaskValues()
     {
         var context = CreateContext();
@@ -76,7 +95,8 @@ public sealed class TaskApiTests
         var task = TaskManager.Domain.Board.TaskItem.Create(
             workspace.Id,
             workspace.WeekStartDate,
-            "Draft plan");
+            "Draft plan",
+            dayDate: new DateOnly(2026, 8, 18));
         dbContext.WeekWorkspaces.Add(workspace);
         dbContext.Tasks.Add(task);
         await dbContext.SaveChangesAsync();
@@ -87,7 +107,7 @@ public sealed class TaskApiTests
             new UpdateTaskRequest(
                 new DateOnly(2026, 8, 17),
                 "Final plan",
-                null,
+                new DateOnly(2026, 8, 18),
                 "Ready",
                 "In Progress",
                 "10:30"),
@@ -103,13 +123,51 @@ public sealed class TaskApiTests
         var clearResult = await facade.UpdateTaskAsync(
             task.Id,
             context,
-            new UpdateTaskRequest(new DateOnly(2026, 8, 17), "Final plan", null, "Ready", "In Progress", string.Empty),
+            new UpdateTaskRequest(new DateOnly(2026, 8, 17), "Final plan", new DateOnly(2026, 8, 18), "Ready", "In Progress", string.Empty),
             dbContext,
             CancellationToken.None);
         var clearResponse = ToResponse(clearResult);
 
         Assert.Equal(StatusCodes.Status200OK, clearResponse.StatusCode);
         Assert.Equal(string.Empty, clearResponse.Body.RootElement
+            .GetProperty("Data").GetProperty("ExecutionTime").GetString());
+        Assert.Equal(string.Empty, (await dbContext.Tasks.SingleAsync()).ExecutionTime);
+    }
+
+    [Fact]
+    public async Task UpdateTaskAsync_ClearsExecutionTimeWhenMovingTimedTaskToSharedWeek()
+    {
+        var context = CreateContext();
+        await using var dbContext = CreateDbContext();
+        var weekStartDate = new DateOnly(2026, 8, 17);
+        var workspace = TaskManager.Domain.Board.WeekWorkspace.Create(weekStartDate);
+        var task = TaskManager.Domain.Board.TaskItem.Create(
+            workspace.Id,
+            weekStartDate,
+            "Timed task",
+            dayDate: new DateOnly(2026, 8, 18),
+            executionTime: "09:30");
+        dbContext.WeekWorkspaces.Add(workspace);
+        dbContext.Tasks.Add(task);
+        await dbContext.SaveChangesAsync();
+
+        var result = await facade.UpdateTaskAsync(
+            task.Id,
+            context,
+            new UpdateTaskRequest(
+                weekStartDate,
+                "Timed task",
+                null,
+                null,
+                "Not Started",
+                "09:30"),
+            dbContext,
+            CancellationToken.None);
+        var response = ToResponse(result);
+
+        Assert.Equal(StatusCodes.Status200OK, response.StatusCode);
+        Assert.Null(response.Body.RootElement.GetProperty("Data").GetProperty("DayDate").GetString());
+        Assert.Equal(string.Empty, response.Body.RootElement
             .GetProperty("Data").GetProperty("ExecutionTime").GetString());
         Assert.Equal(string.Empty, (await dbContext.Tasks.SingleAsync()).ExecutionTime);
     }
@@ -183,7 +241,7 @@ public sealed class TaskApiTests
 
                 Assert.Equal(StatusCodes.Status200OK, response.StatusCode);
                 Assert.Equal(status, response.Body.RootElement.GetProperty("Data").GetProperty("Status").GetString());
-                Assert.Equal("08:30", response.Body.RootElement.GetProperty("Data").GetProperty("ExecutionTime").GetString());
+                Assert.Equal(dayDate is null ? string.Empty : "08:30", response.Body.RootElement.GetProperty("Data").GetProperty("ExecutionTime").GetString());
             }
 
             context.Request.QueryString = new QueryString("?weekStartDate=2026-08-17");
@@ -200,7 +258,7 @@ public sealed class TaskApiTests
             Assert.Equal(status, reloadedTask.GetProperty("Status").GetString());
             Assert.Equal("Target task", reloadedTask.GetProperty("Title").GetString());
             Assert.Equal("Target notes", reloadedTask.GetProperty("Notes").GetString());
-            Assert.Equal("08:30", reloadedTask.GetProperty("ExecutionTime").GetString());
+            Assert.Equal(dayDate is null ? string.Empty : "08:30", reloadedTask.GetProperty("ExecutionTime").GetString());
             Assert.Equal(taskCreatedAt, reloadedTask.GetProperty("CreatedAtUtc").GetDateTime());
         }
     }
@@ -260,6 +318,7 @@ public sealed class TaskApiTests
             workspace.Id,
             weekStartDate,
             "Plan sprint",
+            dayDate: new DateOnly(2026, 8, 18),
             executionTime: "09:30");
         dbContext.WeekWorkspaces.Add(workspace);
         dbContext.Tasks.Add(task);
@@ -268,7 +327,7 @@ public sealed class TaskApiTests
         var result = await facade.UpdateTaskAsync(
             task.Id,
             context,
-            new UpdateTaskRequest(weekStartDate, "Changed title", null, null, "In Progress", "24:00"),
+            new UpdateTaskRequest(weekStartDate, "Changed title", new DateOnly(2026, 8, 18), null, "In Progress", "24:00"),
             dbContext,
             CancellationToken.None);
         var response = ToResponse(result);

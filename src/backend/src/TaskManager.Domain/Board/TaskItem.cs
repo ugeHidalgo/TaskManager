@@ -42,8 +42,8 @@ public sealed class TaskItem
         var normalizedTitle = NormalizeTitle(title);
         var normalizedNotes = NormalizeNotes(notes);
         var normalizedStatus = NormalizeStatus(status);
-        var normalizedExecutionTime = NormalizeExecutionTime(executionTime);
         ValidateDayDate(normalizedWeekStartDate, dayDate);
+        var normalizedExecutionTime = dayDate is null ? string.Empty : NormalizeExecutionTime(executionTime);
         var now = DateTime.UtcNow;
 
         return new TaskItem
@@ -73,7 +73,7 @@ public sealed class TaskItem
         var normalizedTitle = NormalizeTitle(title);
         var normalizedNotes = NormalizeNotes(notes);
         var normalizedStatus = NormalizeStatus(status);
-        var normalizedExecutionTime = NormalizeExecutionTime(executionTime);
+        var normalizedExecutionTime = dayDate is null ? string.Empty : NormalizeExecutionTime(executionTime);
 
         Title = normalizedTitle;
         Notes = normalizedNotes;

@@ -257,6 +257,28 @@ describe("BoardPage week navigation", () => {
     ).not.toBeChecked();
   });
 
+  it("suppresses shared-week execution time rendering even with an older 00:00 value", async () => {
+    const task = {
+      ...makeTask("shared-task", "Shared task", null, "Not Started", "00:00"),
+    };
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      buildBoardResponseFromUrl(String(input), [task]),
+    );
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Shared task")).toBeInTheDocument();
+    expect(screen.queryByText("00:00")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Shared task").closest(".task-title-row"),
+    ).not.toHaveTextContent("00:00");
+  });
+
   it.each(["workweek", "fullweek"] as const)(
     "renders execution time before the title without a clock control in %s view",
     async (viewMode) => {
@@ -264,8 +286,8 @@ describe("BoardPage week navigation", () => {
       const monday = formatDateOnly(getWeekRange(new Date()).weekStart);
       const timedTask = makeTask(
         "timed-task",
-        "Timed shared task",
-        null,
+        "Timed Monday task",
+        monday,
         "Not Started",
         "09:30",
       );
@@ -284,11 +306,11 @@ describe("BoardPage week navigation", () => {
         </MemoryRouter>,
       );
 
-      const timedTitle = await screen.findByText("Timed shared task");
+      const timedTitle = await screen.findByText("Timed Monday task");
       const timedRow = timedTitle.closest(".task-title-row") as HTMLElement;
       expect(
         Array.from(timedRow.children).map((child) => child.textContent),
-      ).toEqual(["09:30", "Timed shared task"]);
+      ).toEqual(["09:30", "Timed Monday task"]);
       expect(timedRow.querySelector(".task-execution-time")).toHaveTextContent(
         "09:30",
       );
@@ -1001,7 +1023,7 @@ describe("BoardPage week navigation", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    expect(savedExecutionTimes).toEqual(["13:45", "13:45"]);
+    expect(savedExecutionTimes).toEqual(["", ""]);
     expect(screen.getByRole("status")).toHaveTextContent("Task updated.");
   });
 

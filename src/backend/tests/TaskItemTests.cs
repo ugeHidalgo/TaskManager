@@ -29,9 +29,26 @@ public sealed class TaskItemTests
     [InlineData("23:59")]
     public void Create_PreservesValidExecutionTime(string executionTime)
     {
-        var task = TaskItem.Create(WorkspaceId, WeekStart, "Plan sprint", executionTime: executionTime);
+        var task = TaskItem.Create(
+            WorkspaceId,
+            WeekStart,
+            "Plan sprint",
+            dayDate: new DateOnly(2026, 8, 18),
+            executionTime: executionTime);
 
         Assert.Equal(executionTime, task.ExecutionTime);
+    }
+
+    [Fact]
+    public void Create_ClearsExecutionTimeForSharedWeekPlacement()
+    {
+        var task = TaskItem.Create(
+            WorkspaceId,
+            WeekStart,
+            "Shared sprint",
+            executionTime: "09:30");
+
+        Assert.Equal(string.Empty, task.ExecutionTime);
     }
 
     [Theory]
@@ -44,7 +61,12 @@ public sealed class TaskItemTests
     public void Create_RejectsMalformedExecutionTime(string executionTime)
     {
         var exception = Assert.Throws<ArgumentException>(() =>
-            TaskItem.Create(WorkspaceId, WeekStart, "Plan sprint", executionTime: executionTime));
+            TaskItem.Create(
+                WorkspaceId,
+                WeekStart,
+                "Plan sprint",
+                dayDate: new DateOnly(2026, 8, 18),
+                executionTime: executionTime));
 
         Assert.Equal("executionTime", exception.ParamName);
     }
@@ -118,8 +140,9 @@ public sealed class TaskItemTests
             WorkspaceId,
             WeekStart,
             "Existing title",
-            notes: "Existing notes",
-            status: "Not Started",
+            new DateOnly(2026, 8, 18),
+            "Existing notes",
+            "Not Started",
             executionTime: "09:30");
 
         var exception = Assert.Throws<ArgumentException>(() =>
@@ -132,11 +155,11 @@ public sealed class TaskItemTests
                 executionTime: "24:00"));
 
         Assert.Equal("executionTime", exception.ParamName);
-            Assert.StartsWith("Execution time must be empty or within the range 00:00 - 23:59.", exception.Message);
+        Assert.StartsWith("Execution time must be empty or within the range 00:00 - 23:59.", exception.Message);
         Assert.Equal("Existing title", task.Title);
         Assert.Equal("Existing notes", task.Notes);
         Assert.Equal("Not Started", task.Status);
-        Assert.Null(task.DayDate);
+        Assert.Equal(new DateOnly(2026, 8, 18), task.DayDate);
         Assert.Equal("09:30", task.ExecutionTime);
     }
 
