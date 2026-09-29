@@ -36,7 +36,14 @@ so that I can plan repeated work without separate daily checks or a recurring te
 - [x] Keep title, execution time, notes, and status available for every generated day; do not discard a valid execution time because the batch is initiated from week context.
 - [x] Validate title, execution time, dates, and chronological range in the form, with accessible labels, keyboard support, and inline feedback.
 
-### Task 2 - Atomic per-day task creation
+### Task 2 - "Not done" task status
+
+- [ ] Add a new `Not done` task status, placed last in the status list (`Not Started`, `In Progress`, `Completed`, `Not done`), accepted and validated by both frontend and backend.
+- [ ] Show `Completed` tasks in gray only, without strikethrough.
+- [ ] Show `Not done` tasks in gray with strikethrough text.
+- [ ] Make the task checkbox cycle through `Not Started` → `In Progress` → `Completed` → `Not done` → `Not Started`, with accessible labels and feedback for each transition.
+
+### Task 3 - Atomic per-day task creation
 
 - [ ] Provide an authenticated, workspace-scoped batch creation use case/endpoint using existing task data and API envelope conventions; no recurring-definition entity, weekday schedule, or daily-check resource.
 - [ ] Validate start/end dates as ISO calendar dates and require start ≤ end; generate each date in the inclusive range without timezone drift, including weekend dates and week boundaries.
@@ -44,13 +51,13 @@ so that I can plan repeated work without separate daily checks or a recurring te
 - [ ] Make a retry of the **same submission** safe (for example via an idempotency key), without blocking a later intentional creation of another batch with the same values.
 - [ ] Return enough information for accurate count feedback and refresh/invalidate every affected board week; on failure, avoid partial persistence or misleading success feedback.
 
-### Task 3 - Individual editing and deletion
+### Task 4 - Individual editing and deletion
 
 - [ ] Use existing day-task card, editor, status toggle, and delete-confirmation flows for every generated task.
 - [ ] Confirm that editing, completing/reopening, or deleting one generated task does not affect any other instance; do not add a series-wide edit/delete action.
 - [ ] Preserve normal task presentation and day/week completion semantics for generated tasks; do not add a separate recurring section or per-day check control for this story.
 
-### Task 4 - Tests and validation
+### Task 5 - Tests and validation
 
 - [ ] Test checkbox placement, default/selected-view dates, read-only placement, unchecking, accessible date inputs, and normal single-task regression.
 - [ ] Test inclusive boundaries, weekend/full-week visibility, ranges spanning weeks, field copying (including execution time and initial status), invalid ranges, atomic failure, and duplicate prevention on retry.
