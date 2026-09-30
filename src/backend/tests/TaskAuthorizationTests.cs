@@ -67,6 +67,33 @@ public sealed class TaskAuthorizationTests : IClassFixture<WebApplicationFactory
     }
 
     [Fact]
+    public async Task MoveTask_ReturnsUnauthorizedEnvelopeWithoutToken()
+    {
+        using var client = factory.CreateClient();
+        var request = new
+        {
+            sourceWeekStartDate = "2026-08-24",
+            sourceDayDate = "2026-08-26",
+            sourceIndex = 0,
+            destinationWeekStartDate = "2026-08-31",
+            destinationDayDate = (string?)null,
+            destinationIndex = 0,
+            sourceSnapshotVersion = "source-version",
+            destinationSnapshotVersion = (string?)null,
+        };
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/tasks/{Guid.NewGuid()}/move",
+            request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(
+            "auth.unauthorized",
+            body.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
     public async Task ReorderTasks_PersistsAuthenticatedSameLaneOrder()
     {
         DateOnly weekStartDate;

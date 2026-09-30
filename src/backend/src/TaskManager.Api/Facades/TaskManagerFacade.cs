@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using TaskManager.Api.Contracts;
 using TaskManager.Application.Auth;
@@ -439,8 +441,76 @@ public sealed class TaskManagerFacade
         }
     }
 
-    public async Task MoveTaskAsync(
+    public async Task<MoveTaskResponse> MoveTaskAsync(
         MoveTaskCommand command,
+        TaskManagerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        return await MoveTaskAsync(command, null, null, false, dbContext, cancellationToken);
+    }
+
+    public async Task<IResult> MoveTaskEndpointAsync(
+        Guid taskId,
+        HttpContext httpContext,
+        MoveTaskRequest request,
+        TaskManagerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(request.SourceSnapshotVersion))
+            {
+                return Results.BadRequest(ApiErrorResponse.Create(
+                    "task.move.validation",
+                    "A source snapshot version is required.",
+                    httpContext.TraceIdentifier));
+            }
+
+            var result = await MoveTaskAsync(
+                new MoveTaskCommand(
+                    taskId,
+                    new TaskLanePosition(request.SourceWeekStartDate, request.SourceDayDate, request.SourceIndex),
+                    new TaskLanePosition(request.DestinationWeekStartDate, request.DestinationDayDate, request.DestinationIndex)),
+                request.SourceSnapshotVersion,
+                request.DestinationSnapshotVersion,
+                true,
+                dbContext,
+                cancellationToken);
+
+            return Results.Ok(ApiSuccessResponse<MoveTaskResponse>.Create(result, httpContext.TraceIdentifier));
+        }
+        catch (MoveTaskConflictException exception)
+        {
+            return Results.Conflict(ApiErrorResponse.Create("task.move.conflict", exception.Message, httpContext.TraceIdentifier));
+        }
+        catch (ArgumentOutOfRangeException exception)
+        {
+            return Results.BadRequest(ApiErrorResponse.Create("task.move.invalid_position", exception.Message, httpContext.TraceIdentifier));
+        }
+        catch (InvalidOperationException exception)
+        {
+            var code = exception.Message.Contains("not found", StringComparison.OrdinalIgnoreCase)
+                ? "task.not_found"
+                : "task.move.invalid_position";
+            return Results.BadRequest(ApiErrorResponse.Create(code, exception.Message, httpContext.TraceIdentifier));
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(ApiErrorResponse.Create("task.move.validation", exception.Message, httpContext.TraceIdentifier));
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return Results.Json(
+                ApiErrorResponse.Create("task.move.unexpected", "The task could not be moved. Please reload and try again.", httpContext.TraceIdentifier),
+                statusCode: StatusCodes.Status500InternalServerError);
+        }
+    }
+
+    private async Task<MoveTaskResponse> MoveTaskAsync(
+        MoveTaskCommand command,
+        string? expectedSourceSnapshotVersion,
+        string? expectedDestinationSnapshotVersion,
+        bool validateVersions,
         TaskManagerDbContext dbContext,
         CancellationToken cancellationToken)
     {
@@ -455,6 +525,7 @@ public sealed class TaskManagerFacade
                 workspace => workspace.WeekStartDate == command.Source.WeekStartDate,
                 cancellationToken)
             ?? throw new InvalidOperationException("The task source week was not found.");
+        await ValidateSnapshotVersionAsync(dbContext, sourceWorkspace, expectedSourceSnapshotVersion, validateVersions, cancellationToken);
         var sourceLane = await GetOrderedLaneAsync(
             dbContext,
             sourceWorkspace.Id,
@@ -473,6 +544,19 @@ public sealed class TaskManagerFacade
             : await dbContext.WeekWorkspaces.SingleOrDefaultAsync(
                 workspace => workspace.WeekStartDate == command.Destination.WeekStartDate,
                 cancellationToken);
+        if (destinationWorkspace is not null)
+        {
+            await ValidateSnapshotVersionAsync(
+                dbContext,
+                destinationWorkspace,
+                expectedDestinationSnapshotVersion,
+                validateVersions,
+                cancellationToken);
+        }
+        else if (!string.IsNullOrWhiteSpace(expectedDestinationSnapshotVersion))
+        {
+            throw new MoveTaskConflictException("The destination week changed. Reload it and try again.");
+        }
         var sameLane = sameWeek
             && command.Source.DayDate == command.Destination.DayDate;
         var destinationLane = sameLane
@@ -540,6 +624,12 @@ public sealed class TaskManagerFacade
         {
             await transaction.CommitAsync(cancellationToken);
         }
+
+        var sourceSnapshot = await CreateWeekSnapshotAsync(dbContext, sourceWorkspace, cancellationToken);
+        var destinationSnapshot = sameWeek
+            ? sourceSnapshot
+            : await CreateWeekSnapshotAsync(dbContext, destinationWorkspace, cancellationToken);
+        return new MoveTaskResponse(task.Id, sourceSnapshot, destinationSnapshot);
     }
 
     public async Task<IResult> DeleteTaskAsync(
@@ -641,6 +731,63 @@ public sealed class TaskManagerFacade
             .ToListAsync(cancellationToken);
     }
 
+    private static async Task ValidateSnapshotVersionAsync(
+        TaskManagerDbContext dbContext,
+        WeekWorkspace workspace,
+        string? expectedSnapshotVersion,
+        bool required,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(expectedSnapshotVersion))
+        {
+            if (!required)
+            {
+                return;
+            }
+
+            throw new ArgumentException("A source and destination snapshot version are required.");
+        }
+
+        var snapshot = await CreateWeekSnapshotAsync(dbContext, workspace, cancellationToken);
+        if (!string.Equals(snapshot.SnapshotVersion, expectedSnapshotVersion, StringComparison.Ordinal))
+        {
+            throw new MoveTaskConflictException("The week changed while the request was being prepared. Reload and try again.");
+        }
+    }
+
+    private static async Task<WeekTaskSnapshot> CreateWeekSnapshotAsync(
+        TaskManagerDbContext dbContext,
+        WeekWorkspace workspace,
+        CancellationToken cancellationToken)
+    {
+        var tasks = await dbContext.Tasks
+            .Where(task => task.WeekWorkspaceId == workspace.Id)
+            .OrderBy(task => task.DayDate)
+            .ThenBy(task => task.OrderIndex)
+            .ThenBy(task => task.Id)
+            .ToListAsync(cancellationToken);
+        var taskResponses = tasks.Select(ToTaskResponse).ToArray();
+        var snapshotContent = new StringBuilder(workspace.WeekStartDate.ToString("O"));
+        foreach (var task in taskResponses)
+        {
+            snapshotContent.Append('|')
+                .Append(task.Id)
+                .Append('|').Append(task.DayDate?.ToString("O") ?? "shared")
+                .Append('|').Append(task.OrderIndex)
+                .Append('|').Append(task.Title)
+                .Append('|').Append(task.Notes)
+                .Append('|').Append(task.Status)
+                .Append('|').Append(task.ExecutionTime)
+                .Append('|').Append(task.UpdatedAtUtc.ToUniversalTime().Ticks);
+        }
+
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(snapshotContent.ToString()));
+        return new WeekTaskSnapshot(
+            workspace.WeekStartDate,
+            Convert.ToHexString(hash),
+            taskResponses);
+    }
+
     private static void SetLaneOrder(IReadOnlyList<TaskItem> tasks)
     {
         for (var index = 0; index < tasks.Count; index++)
@@ -732,4 +879,6 @@ public sealed class TaskManagerFacade
 
         return Results.Ok(ApiSuccessResponse<object>.Create(new { username }, httpContext.TraceIdentifier));
     }
+
+    private sealed class MoveTaskConflictException(string message) : Exception(message);
 }

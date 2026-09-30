@@ -48,11 +48,11 @@ so that I can reassign work without recreating it.
 
 ### Task 2 - Move API contract
 
-- [ ] Add `POST /api/v1/tasks/{taskId}/move` with explicit camelCase DTOs and standard envelopes.
-- [ ] Add source/destination snapshot version or equivalent optimistic-concurrency validation.
-- [ ] Return authoritative source and destination snapshots plus metadata needed for cache reconciliation.
-- [ ] Map invalid lane/index/week, missing task, forbidden access, conflict, and unexpected failure to stable error codes.
-- [ ] Ensure a failed transaction cannot leave the task in both lanes or in neither lane.
+- [x] Add `POST /api/v1/tasks/{taskId}/move` with explicit camelCase DTOs and standard envelopes.
+- [x] Add source/destination snapshot version or equivalent optimistic-concurrency validation.
+- [x] Return authoritative source and destination snapshots plus metadata needed for cache reconciliation.
+- [x] Map invalid lane/index/week, missing task, forbidden access, conflict, and unexpected failure to stable error codes.
+- [x] Ensure a failed transaction cannot leave the task in both lanes or in neither lane.
 
 ### Task 3 - Board and context-menu flow
 
@@ -107,11 +107,15 @@ so that I can reassign work without recreating it.
 - Added `TaskItem.MoveTo` to update week ownership and nullable day placement without replacing task identity or changing task content/status; moving to shared-week clears execution time.
 - Added a transaction-backed move operation that verifies the source position, inserts at the requested destination position, and collision-safely reindexes all affected lanes.
 - Added unit and PostgreSQL-backed regressions for cross-week moves, same-week day/shared-week moves, same-lane reordering, metadata preservation, invalid destination positions, and lane index normalization.
-- Task 2 and later tasks remain untouched; the move operation is not yet exposed as an HTTP endpoint.
+- Added `POST /api/v1/tasks/{taskId}/move` with camelCase request DTOs, standard success/error envelopes, and source/destination snapshots.
+- Added deterministic snapshot versions and in-transaction optimistic validation; conflicts return `task.move.conflict`.
+- Added stable move error mapping for validation, invalid positions, missing tasks, conflicts, and unexpected failures.
 
 ### File List
 
 - `src/backend/src/TaskManager.Application/Board/MoveTaskCommand.cs`
+- `src/backend/src/TaskManager.Api/Contracts/TaskContracts.cs`
+- `src/backend/src/TaskManager.Api/Program.cs`
 - `src/backend/src/TaskManager.Api/Facades/TaskManagerFacade.cs`
 - `src/backend/src/TaskManager.Domain/Board/TaskItem.cs`
 - `src/backend/tests/TaskApiTests.cs`
@@ -122,3 +126,4 @@ so that I can reassign work without recreating it.
 ### Change Log
 
 - 2026-09-30: Completed US3.2 Task 1 with normalized move command, transactional lane reindexing, domain placement updates, shared-week execution-time normalization, and focused backend coverage.
+- 2026-09-30: Completed US3.2 Task 2 with versioned move API contract, authoritative source/destination snapshots, stable error mapping, and full backend validation.

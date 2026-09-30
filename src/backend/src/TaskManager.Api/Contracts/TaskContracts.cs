@@ -39,6 +39,26 @@ public sealed record ReorderedTaskLaneResponse(
     DateOnly? DayDate,
     IReadOnlyList<TaskResponse> Tasks);
 
+public sealed record MoveTaskRequest(
+    DateOnly SourceWeekStartDate,
+    DateOnly? SourceDayDate,
+    int SourceIndex,
+    DateOnly DestinationWeekStartDate,
+    DateOnly? DestinationDayDate,
+    int DestinationIndex,
+    string SourceSnapshotVersion,
+    string? DestinationSnapshotVersion);
+
+public sealed record MoveTaskResponse(
+    Guid TaskId,
+    WeekTaskSnapshot Source,
+    WeekTaskSnapshot Destination);
+
+public sealed record WeekTaskSnapshot(
+    DateOnly WeekStartDate,
+    string SnapshotVersion,
+    IReadOnlyList<TaskResponse> Tasks);
+
 public sealed record TaskResponse(
     Guid Id,
     Guid WeekWorkspaceId,

@@ -201,6 +201,15 @@ app.MapPut("/api/v1/tasks/reorder", [Authorize] (
     CancellationToken cancellationToken) =>
     facade.ReorderTasksAsync(httpContext, request, dbContext, cancellationToken));
 
+app.MapPost("/api/v1/tasks/{taskId:guid}/move", [Authorize] (
+    Guid taskId,
+    MoveTaskRequest request,
+    HttpContext httpContext,
+    TaskManagerFacade facade,
+    TaskManagerDbContext dbContext,
+    CancellationToken cancellationToken) =>
+    facade.MoveTaskEndpointAsync(taskId, httpContext, request, dbContext, cancellationToken));
+
 app.MapPut("/api/v1/tasks/{taskId:guid}", [Authorize] (
     Guid taskId,
     UpdateTaskRequest request,
