@@ -104,6 +104,133 @@ public sealed class TaskApiTests
     }
 
     [Fact]
+    public async Task ReorderTasksAsync_PersistsSubmittedOrderAndPreservesTaskData()
+    {
+        var weekStartDate = new DateOnly(2026, 8, 17);
+        var dayDate = new DateOnly(2026, 8, 19);
+        var context = CreateContext();
+        var options = new DbContextOptionsBuilder<TaskManagerDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        await using var dbContext = new TaskManagerDbContext(options);
+        var workspace = TaskManager.Domain.Board.WeekWorkspace.Create(weekStartDate);
+        var first = TaskManager.Domain.Board.TaskItem.Create(
+            workspace.Id, weekStartDate, "First", dayDate, "First notes", "Completed", "08:30");
+        var second = TaskManager.Domain.Board.TaskItem.Create(
+            workspace.Id, weekStartDate, "Second", dayDate, "Second notes", "In Progress", "09:30");
+        first.SetOrderIndex(0);
+        second.SetOrderIndex(1);
+        dbContext.WeekWorkspaces.Add(workspace);
+        dbContext.Tasks.AddRange(first, second);
+        await dbContext.SaveChangesAsync();
+        var originalFirstUpdatedAt = first.UpdatedAtUtc;
+        var originalSecondUpdatedAt = second.UpdatedAtUtc;
+
+        var result = await facade.ReorderTasksAsync(
+            context,
+            new ReorderTasksRequest(weekStartDate, dayDate, [second.Id, first.Id]),
+            dbContext,
+            CancellationToken.None);
+        var response = ToResponse(result);
+        var data = response.Body.RootElement.GetProperty("Data");
+        var orderedTasks = data.GetProperty("Tasks").EnumerateArray().ToArray();
+
+        Assert.Equal(StatusCodes.Status200OK, response.StatusCode);
+        Assert.Equal(new[] { second.Id, first.Id }, orderedTasks.Select(task => task.GetProperty("Id").GetGuid()));
+        Assert.Equal("2026-08-19", data.GetProperty("DayDate").GetString());
+        Assert.Equal("Second", orderedTasks[0].GetProperty("Title").GetString());
+        Assert.Equal("In Progress", orderedTasks[0].GetProperty("Status").GetString());
+        Assert.Equal("Second notes", orderedTasks[0].GetProperty("Notes").GetString());
+        Assert.Equal("09:30", orderedTasks[0].GetProperty("ExecutionTime").GetString());
+        Assert.Equal(originalSecondUpdatedAt, orderedTasks[0].GetProperty("UpdatedAtUtc").GetDateTime());
+        Assert.Equal(originalFirstUpdatedAt, orderedTasks[1].GetProperty("UpdatedAtUtc").GetDateTime());
+
+        await using var reloadContext = new TaskManagerDbContext(options);
+        var persistedTasks = await reloadContext.Tasks
+            .Where(task => task.WeekWorkspaceId == workspace.Id && task.DayDate == dayDate)
+            .OrderBy(task => task.OrderIndex)
+            .ToListAsync();
+        Assert.Equal(new[] { second.Id, first.Id }, persistedTasks.Select(task => task.Id));
+    }
+
+    [Theory]
+    [InlineData("duplicate")]
+    [InlineData("incomplete")]
+    [InlineData("other-lane")]
+    [InlineData("other-week")]
+    public async Task ReorderTasksAsync_RejectsInvalidLaneSequenceWithoutChangingOrder(string scenario)
+    {
+        var weekStartDate = new DateOnly(2026, 8, 17);
+        var dayDate = new DateOnly(2026, 8, 19);
+        var workspace = TaskManager.Domain.Board.WeekWorkspace.Create(weekStartDate);
+        var first = TaskManager.Domain.Board.TaskItem.Create(workspace.Id, weekStartDate, "First", dayDate);
+        var second = TaskManager.Domain.Board.TaskItem.Create(workspace.Id, weekStartDate, "Second", dayDate);
+        first.SetOrderIndex(0);
+        second.SetOrderIndex(1);
+        var taskIds = new List<Guid> { second.Id, first.Id };
+        var requestWeekStartDate = weekStartDate;
+        DateOnly? requestDayDate = dayDate;
+
+        if (scenario == "duplicate")
+        {
+            taskIds[1] = second.Id;
+        }
+        else if (scenario == "incomplete")
+        {
+            taskIds.RemoveAt(1);
+        }
+        else if (scenario == "other-lane")
+        {
+            requestDayDate = new DateOnly(2026, 8, 20);
+        }
+        else if (scenario == "other-week")
+        {
+            requestWeekStartDate = new DateOnly(2026, 8, 24);
+            requestDayDate = new DateOnly(2026, 8, 26);
+        }
+
+        await using var dbContext = CreateDbContext();
+        dbContext.WeekWorkspaces.Add(workspace);
+        dbContext.Tasks.AddRange(first, second);
+        await dbContext.SaveChangesAsync();
+
+        var result = await facade.ReorderTasksAsync(
+            CreateContext(),
+            new ReorderTasksRequest(requestWeekStartDate, requestDayDate, taskIds),
+            dbContext,
+            CancellationToken.None);
+        var response = ToResponse(result);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
+        Assert.Equal("task.order.invalid_sequence", response.Body.RootElement
+            .GetProperty("Error").GetProperty("Code").GetString());
+        Assert.Equal(new[] { first.Id, second.Id }, await dbContext.Tasks
+            .OrderBy(task => task.OrderIndex)
+            .Select(task => task.Id)
+            .ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task ReorderTasksAsync_RejectsDayOutsideRequestedWeek()
+    {
+        await using var dbContext = CreateDbContext();
+
+        var result = await facade.ReorderTasksAsync(
+            CreateContext(),
+            new ReorderTasksRequest(
+                new DateOnly(2026, 8, 17),
+                new DateOnly(2026, 8, 24),
+                []),
+            dbContext,
+            CancellationToken.None);
+        var response = ToResponse(result);
+
+        Assert.Equal(StatusCodes.Status400BadRequest, response.StatusCode);
+        Assert.Equal("task.order.invalid_lane", response.Body.RootElement
+            .GetProperty("Error").GetProperty("Code").GetString());
+    }
+
+    [Fact]
     public async Task CreateTaskAsync_ClearsExecutionTimeForSharedWeekPlacement()
     {
         var context = CreateContext();

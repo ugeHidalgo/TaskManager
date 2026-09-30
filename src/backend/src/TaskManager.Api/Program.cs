@@ -193,6 +193,14 @@ app.MapPost("/api/v1/tasks/recurring", [Authorize] (
     CancellationToken cancellationToken) =>
     facade.CreateRecurringTasksAsync(httpContext, request, dbContext, cancellationToken));
 
+app.MapPut("/api/v1/tasks/reorder", [Authorize] (
+    ReorderTasksRequest request,
+    HttpContext httpContext,
+    TaskManagerFacade facade,
+    TaskManagerDbContext dbContext,
+    CancellationToken cancellationToken) =>
+    facade.ReorderTasksAsync(httpContext, request, dbContext, cancellationToken));
+
 app.MapPut("/api/v1/tasks/{taskId:guid}", [Authorize] (
     Guid taskId,
     UpdateTaskRequest request,

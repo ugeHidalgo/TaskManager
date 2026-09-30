@@ -261,6 +261,119 @@ public sealed class TaskManagerFacade
         }
     }
 
+    public async Task<IResult> ReorderTasksAsync(
+        HttpContext httpContext,
+        ReorderTasksRequest request,
+        TaskManagerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var weekStartDate = ToMonday(request.WeekStartDate);
+        if (request.DayDate is not null
+            && (request.DayDate.Value < weekStartDate || request.DayDate.Value > weekStartDate.AddDays(6)))
+        {
+            return Results.BadRequest(ApiErrorResponse.Create(
+                code: "task.order.invalid_lane",
+                message: "The requested lane must be within the selected week.",
+                requestId: httpContext.TraceIdentifier));
+        }
+
+        if (request.TaskIds is null || request.TaskIds.Distinct().Count() != request.TaskIds.Count)
+        {
+            return Results.BadRequest(ApiErrorResponse.Create(
+                code: "task.order.invalid_sequence",
+                message: "Submit each task in the lane exactly once, in the desired order.",
+                requestId: httpContext.TraceIdentifier));
+        }
+
+        try
+        {
+            await using var transaction = dbContext.Database.IsRelational()
+                ? await dbContext.Database.BeginTransactionAsync(cancellationToken)
+                : null;
+            var workspace = await dbContext.WeekWorkspaces
+                .SingleOrDefaultAsync(candidate => candidate.WeekStartDate == weekStartDate, cancellationToken);
+            var laneTasks = workspace is null
+                ? []
+                : await dbContext.Tasks
+                    .Where(task => task.WeekWorkspaceId == workspace.Id && task.DayDate == request.DayDate)
+                    .OrderBy(task => task.OrderIndex)
+                    .ThenBy(task => task.Id)
+                    .ToListAsync(cancellationToken);
+
+            if (request.TaskIds.Count != laneTasks.Count
+                || !request.TaskIds.ToHashSet().SetEquals(laneTasks.Select(task => task.Id)))
+            {
+                return Results.BadRequest(ApiErrorResponse.Create(
+                    code: "task.order.invalid_sequence",
+                    message: "The task list must contain every task in the selected lane and no others. Reload the lane and try again.",
+                    requestId: httpContext.TraceIdentifier));
+            }
+
+            var laneTasksById = laneTasks.ToDictionary(task => task.Id);
+            var sequenceChanged = request.TaskIds
+                .Where((taskId, index) => laneTasks[index].Id != taskId)
+                .Any();
+
+            if (sequenceChanged)
+            {
+                if (transaction is not null)
+                {
+                    var temporaryStart = (long)laneTasks.Max(task => task.OrderIndex) + laneTasks.Count + 1;
+                    if (temporaryStart + laneTasks.Count - 1 > int.MaxValue)
+                    {
+                        return Results.Conflict(ApiErrorResponse.Create(
+                            code: "task.order.conflict",
+                            message: "The lane order could not be updated. Reload the lane and try again.",
+                            requestId: httpContext.TraceIdentifier));
+                    }
+
+                    for (var index = 0; index < laneTasks.Count; index++)
+                    {
+                        laneTasks[index].SetOrderIndex((int)(temporaryStart + index));
+                    }
+
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                }
+
+                for (var index = 0; index < request.TaskIds.Count; index++)
+                {
+                    laneTasksById[request.TaskIds[index]].SetOrderIndex(index);
+                }
+
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
+
+            var orderedTasks = request.TaskIds.Select(taskId => laneTasksById[taskId]);
+            return Results.Ok(ApiSuccessResponse<ReorderedTaskLaneResponse>.Create(
+                new ReorderedTaskLaneResponse(
+                    weekStartDate,
+                    request.DayDate,
+                    orderedTasks.Select(ToTaskResponse).ToArray()),
+                httpContext.TraceIdentifier));
+        }
+        catch (DbUpdateException)
+        {
+            return Results.Conflict(ApiErrorResponse.Create(
+                code: "task.order.conflict",
+                message: "The lane order changed while the request was being processed. Reload the lane and try again.",
+                requestId: httpContext.TraceIdentifier));
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return Results.Json(
+                ApiErrorResponse.Create(
+                    code: "task.order.unexpected",
+                    message: "The lane order could not be updated. Please reload and try again.",
+                    requestId: httpContext.TraceIdentifier),
+                statusCode: StatusCodes.Status500InternalServerError);
+        }
+    }
+
     public async Task<IResult> UpdateTaskAsync(
         Guid taskId,
         HttpContext httpContext,

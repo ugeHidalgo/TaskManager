@@ -42,11 +42,11 @@ so that I can set priority quickly as my plan changes.
 
 ### Task 2 - Authenticated reorder API
 
-- [ ] Add a versioned authenticated reorder endpoint using explicit request/response DTOs.
-- [ ] Validate that submitted task IDs are unique, complete for the target lane, belong to the authenticated workspace/week, and match the requested lane.
-- [ ] Normalize `order_index` from the submitted sequence in one transaction.
-- [ ] Return the authoritative ordered lane snapshot using `{ data, meta }`; map failures to the existing structured error envelope.
-- [ ] Preserve status, title, notes, execution time, placement, timestamps, and IDs while changing order only.
+- [x] Add a versioned authenticated reorder endpoint using explicit request/response DTOs.
+- [x] Validate that submitted task IDs are unique, complete for the target lane, belong to the authenticated workspace/week, and match the requested lane.
+- [x] Normalize `order_index` from the submitted sequence in one transaction.
+- [x] Return the authoritative ordered lane snapshot using `{ data, meta }`; map failures to the existing structured error envelope.
+- [x] Preserve status, title, notes, execution time, placement, timestamps, and IDs while changing order only.
 
 ### Task 3 - Frontend reorder interaction
 
@@ -94,6 +94,8 @@ so that I can set priority quickly as my plan changes.
 - `dotnet test src/backend/tests/Taskmanager.Tests.csproj --filter FullyQualifiedName~TaskApiTests|FullyQualifiedName~TaskItemTests --no-restore` -- passed, 38 tests.
 - `dotnet test TaskManager.sln --no-restore` -- passed; migration applied by the integration test database.
 - `dotnet ef migrations has-pending-model-changes --project src/backend/src/TaskManager.Infrastructure/TaskManager.Infrastructure.csproj --startup-project src/backend/src/TaskManager.Api/TaskManager.Api.csproj` -- passed with no pending model changes.
+- `dotnet test src/backend/tests/Taskmanager.Tests.csproj --filter 'FullyQualifiedName~ReorderTasks' --no-restore` -- passed, 8 tests including the authenticated PostgreSQL route test.
+- `dotnet test TaskManager.sln --no-restore` -- passed, 58 tests.
 
 ### Completion Notes List
 
@@ -102,6 +104,8 @@ so that I can set priority quickly as my plan changes.
 - Task reads now expose `OrderIndex` and use it as the authoritative priority while retaining creation-time compatibility for legacy rows with the migration default.
 - Deleting a task compacts its lane; changing task placement compacts the source lane and appends the task to the destination lane without changing identity or status.
 - Added domain and API regressions for negative order rejection and lane compaction after deletion.
+- Added the authenticated `PUT /api/v1/tasks/reorder` contract; validates complete, unique same-week/lane sequences, performs collision-safe order normalization in a transaction, and returns the ordered lane snapshot with structured errors while leaving other task fields unchanged.
+- Added API tests for successful persistence/reload, duplicate and incomplete sequences, cross-lane/week IDs, invalid lane dates, metadata preservation, and unauthenticated denial.
 - Existing `Program.cs` JWT secret nullability warning remains unchanged.
 
 ### File List
@@ -113,9 +117,12 @@ so that I can set priority quickly as my plan changes.
 - `src/backend/src/TaskManager.Infrastructure/Persistence/Migrations/TaskManagerDbContextModelSnapshot.cs`
 - `src/backend/src/TaskManager.Api/Contracts/TaskContracts.cs`
 - `src/backend/src/TaskManager.Api/Facades/TaskManagerFacade.cs`
+- `src/backend/src/TaskManager.Api/Program.cs`
 - `src/backend/tests/TaskItemTests.cs`
 - `src/backend/tests/TaskApiTests.cs`
+- `src/backend/tests/TaskAuthorizationTests.cs`
 
 ### Change Log
 
 - 2026-09-30: Implemented Task 1 ordering model, persistence migration/backfill, lane protection, creation/deletion/placement reindexing, and focused regressions.
+- 2026-09-30: Implemented Task 2 authenticated same-lane reorder API, transaction-safe normalization, structured response/errors, and backend coverage.

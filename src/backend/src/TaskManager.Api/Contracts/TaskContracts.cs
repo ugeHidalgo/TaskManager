@@ -29,6 +29,16 @@ public sealed record UpdateTaskRequest(
     string? Status,
     string ExecutionTime);
 
+public sealed record ReorderTasksRequest(
+    DateOnly WeekStartDate,
+    DateOnly? DayDate,
+    IReadOnlyList<Guid> TaskIds);
+
+public sealed record ReorderedTaskLaneResponse(
+    DateOnly WeekStartDate,
+    DateOnly? DayDate,
+    IReadOnlyList<TaskResponse> Tasks);
+
 public sealed record TaskResponse(
     Guid Id,
     Guid WeekWorkspaceId,

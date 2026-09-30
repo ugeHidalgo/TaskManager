@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using TaskManager.Application.Auth;
 using TaskManager.Domain.Board;
 using TaskManager.Infrastructure.Persistence;
 using Xunit;
@@ -41,6 +42,123 @@ public sealed class TaskAuthorizationTests : IClassFixture<WebApplicationFactory
         Assert.Equal(
             "auth.unauthorized",
             body.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ReorderTasks_ReturnsUnauthorizedEnvelopeWithoutToken()
+    {
+        using var client = factory.CreateClient();
+        var request = new
+        {
+            weekStartDate = "2026-08-24",
+            dayDate = "2026-08-26",
+            taskIds = Array.Empty<Guid>(),
+        };
+
+        var response = await client.PutAsJsonAsync("/api/v1/tasks/reorder", request);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(
+            "auth.unauthorized",
+            body.RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ReorderTasks_PersistsAuthenticatedSameLaneOrder()
+    {
+        DateOnly weekStartDate;
+        Guid workspaceId;
+        Guid firstTaskId;
+        Guid secondTaskId;
+        DateTime firstUpdatedAtUtc;
+        DateTime secondUpdatedAtUtc;
+        var dayDate = default(DateOnly);
+
+        await using (var seedScope = factory.Services.CreateAsyncScope())
+        {
+            var dbContext = seedScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            do
+            {
+                var candidate = GetRandomWeekStartDate();
+                weekStartDate = candidate;
+            }
+            while (await dbContext.WeekWorkspaces.AnyAsync(workspace => workspace.WeekStartDate == weekStartDate));
+
+            dayDate = weekStartDate.AddDays(2);
+            var workspace = WeekWorkspace.Create(weekStartDate);
+            var firstTask = TaskItem.Create(workspace.Id, weekStartDate, "First", dayDate, "Keep first", "Completed", "08:30");
+            var secondTask = TaskItem.Create(workspace.Id, weekStartDate, "Second", dayDate, "Keep second", "In Progress", "09:30");
+            firstTask.SetOrderIndex(0);
+            secondTask.SetOrderIndex(1);
+            workspaceId = workspace.Id;
+            firstTaskId = firstTask.Id;
+            secondTaskId = secondTask.Id;
+            firstUpdatedAtUtc = firstTask.UpdatedAtUtc;
+            secondUpdatedAtUtc = secondTask.UpdatedAtUtc;
+            dbContext.WeekWorkspaces.Add(workspace);
+            dbContext.Tasks.AddRange(firstTask, secondTask);
+            await dbContext.SaveChangesAsync();
+        }
+
+        try
+        {
+            string token;
+            using (var tokenScope = factory.Services.CreateScope())
+            {
+                token = tokenScope.ServiceProvider.GetRequiredService<IJwtTokenService>()
+                    .CreateToken(Guid.NewGuid(), "reorder-test")
+                    .Token;
+            }
+
+            using var client = factory.CreateClient();
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var request = new
+            {
+                weekStartDate = weekStartDate.ToString("yyyy-MM-dd"),
+                dayDate = dayDate.ToString("yyyy-MM-dd"),
+                taskIds = new[] { secondTaskId, firstTaskId },
+            };
+
+            var response = await client.PutAsJsonAsync("/api/v1/tasks/reorder", request);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            Assert.Equal(
+                new[] { secondTaskId, firstTaskId },
+                body.RootElement.GetProperty("data").GetProperty("tasks")
+                    .EnumerateArray().Select(task => task.GetProperty("id").GetGuid()));
+
+            await using var verificationScope = factory.Services.CreateAsyncScope();
+            var verificationContext = verificationScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            var persistedTasks = await verificationContext.Tasks
+                .Where(task => task.WeekWorkspaceId == workspaceId)
+                .OrderBy(task => task.OrderIndex)
+                .ToListAsync();
+            Assert.Equal(new[] { secondTaskId, firstTaskId }, persistedTasks.Select(task => task.Id));
+            Assert.Equal(secondUpdatedAtUtc, persistedTasks[0].UpdatedAtUtc);
+            Assert.Equal(firstUpdatedAtUtc, persistedTasks[1].UpdatedAtUtc);
+            Assert.Equal("Completed", persistedTasks[1].Status);
+            Assert.Equal("Keep first", persistedTasks[1].Notes);
+            Assert.Equal("08:30", persistedTasks[1].ExecutionTime);
+        }
+        finally
+        {
+            await using var cleanupScope = factory.Services.CreateAsyncScope();
+            var cleanupContext = cleanupScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            cleanupContext.Tasks.RemoveRange(await cleanupContext.Tasks
+                .Where(task => task.WeekWorkspaceId == workspaceId)
+                .ToListAsync());
+            var workspace = await cleanupContext.WeekWorkspaces
+                .SingleOrDefaultAsync(candidate => candidate.Id == workspaceId);
+            if (workspace is not null)
+            {
+                cleanupContext.WeekWorkspaces.Remove(workspace);
+            }
+
+            await cleanupContext.SaveChangesAsync();
+        }
     }
 
     [Fact]
