@@ -14,6 +14,7 @@ interface ApiError {
 export interface BoardPayload {
   weekStartDate: string;
   lanes: unknown[];
+  snapshotVersion: string;
 }
 
 export interface TaskPayload {
@@ -39,6 +40,29 @@ export interface ReorderedTaskLanePayload {
   weekStartDate: string;
   dayDate: string | null;
   tasks: TaskPayload[];
+}
+
+export interface MoveTaskRequest {
+  sourceWeekStartDate: string;
+  sourceDayDate: string | null;
+  sourceIndex: number;
+  destinationWeekStartDate: string;
+  destinationDayDate: string | null;
+  destinationIndex: number;
+  sourceSnapshotVersion: string;
+  destinationSnapshotVersion: string | null;
+}
+
+export interface WeekTaskSnapshot {
+  weekStartDate: string;
+  snapshotVersion: string;
+  tasks: TaskPayload[];
+}
+
+export interface MoveTaskResponse {
+  taskId: string;
+  source: WeekTaskSnapshot;
+  destination: WeekTaskSnapshot;
 }
 
 export interface SaveTaskInput {
@@ -223,6 +247,19 @@ export async function reorderTasks(
   return saveTaskRequest<ReorderedTaskLanePayload>(
     `${apiBaseUrl}/tasks/reorder`,
     "PUT",
+    token,
+    input,
+  );
+}
+
+export async function moveTask(
+  token: string,
+  taskId: string,
+  input: MoveTaskRequest,
+): Promise<MoveTaskResponse> {
+  return saveTaskRequest<MoveTaskResponse>(
+    `${apiBaseUrl}/tasks/${encodeURIComponent(taskId)}/move`,
+    "POST",
     token,
     input,
   );

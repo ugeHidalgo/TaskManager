@@ -1,4 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -204,6 +210,83 @@ describe("BoardPage week navigation", () => {
         expect.objectContaining({
           headers: expect.objectContaining({
             Authorization: "Bearer jwt-token",
+          }),
+        }),
+      );
+    });
+  });
+
+  it("moves a task across day lanes through direct drag and drop", async () => {
+    const initialWeekStart = getWeekRange(new Date()).weekStart;
+    const sourceDay = formatDateOnly(initialWeekStart);
+    const destinationDay = formatDateOnly(shiftDateByDays(initialWeekStart, 1));
+    const tasks = [
+      makeTask("task-1", "Plan Monday work", sourceDay),
+      makeTask("task-2", "Plan Tuesday work", destinationDay),
+    ];
+
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
+        const url = String(input);
+
+        if (url.includes("/tasks/task-1/move")) {
+          return new Response(
+            JSON.stringify({
+              data: {
+                taskId: "task-1",
+                source: {
+                  weekStartDate: sourceDay,
+                  snapshotVersion: "source-version",
+                  tasks: tasks.filter((task) => task.id !== "task-1"),
+                },
+                destination: {
+                  weekStartDate: sourceDay,
+                  snapshotVersion: "destination-version",
+                  tasks: [
+                    ...tasks.filter((task) => task.id !== "task-1"),
+                    { ...tasks[0], dayDate: destinationDay },
+                  ],
+                },
+              },
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        return buildBoardResponseFromUrl(url, tasks);
+      });
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    const sourceCard = (await screen.findByText("Plan Monday work")).closest(
+      ".task-item",
+    );
+    const destinationCard = screen
+      .getByText("Plan Tuesday work")
+      .closest(".task-item");
+
+    expect(sourceCard).not.toBeNull();
+    expect(destinationCard).not.toBeNull();
+    fireEvent.dragStart(sourceCard as HTMLElement);
+    fireEvent.dragOver(destinationCard as HTMLElement);
+    fireEvent.drop(destinationCard as HTMLElement);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/tasks/task-1/move"),
+        expect.objectContaining({
+          method: "POST",
+          headers: expect.objectContaining({
+            Authorization: "Bearer jwt-token",
+            "Content-Type": "application/json",
           }),
         }),
       );
@@ -628,8 +711,6 @@ describe("BoardPage week navigation", () => {
       "task-completion-checkbox",
       "edit-task-button",
       "delete-task-button",
-      "task-reorder-button",
-      "task-reorder-button",
       "task-progress-label",
     ]);
     expect(
@@ -637,7 +718,7 @@ describe("BoardPage week navigation", () => {
     ).toBeInTheDocument();
     expect(
       within(inProgressRows[1] as HTMLElement).getAllByRole("button"),
-    ).toHaveLength(5);
+    ).toHaveLength(3);
 
     const notStartedCard = screen
       .getByText("Not started title")
@@ -653,8 +734,6 @@ describe("BoardPage week navigation", () => {
       "task-completion-checkbox",
       "edit-task-button",
       "delete-task-button",
-      "task-reorder-button",
-      "task-reorder-button",
       "task-not-started-label",
     ]);
     expect(notStartedCard.querySelector(".task-progress-label")).toBeNull();
@@ -690,7 +769,7 @@ describe("BoardPage week navigation", () => {
         name: "Task 3: Delete task: Completed title",
       }),
     ).toBeVisible();
-    expect(within(completedCard).getAllByRole("button")).toHaveLength(5);
+    expect(within(completedCard).getAllByRole("button")).toHaveLength(3);
   });
 
   it("cancels or confirms permanent task deletion", async () => {
@@ -895,8 +974,7 @@ describe("BoardPage week navigation", () => {
     );
   });
 
-  it("moves a task with keyboard controls, persists the lane, and retains focus", async () => {
-    const user = userEvent.setup();
+  it("reorders a task with mouse drag and drop and persists the lane", async () => {
     const firstTask = withOrder(makeTask("first-task", "First task", null), 0);
     const secondTask = withOrder(
       makeTask("second-task", "Second task", null),
@@ -937,10 +1015,15 @@ describe("BoardPage week navigation", () => {
       </MemoryRouter>,
     );
 
-    const moveEarlier = await screen.findByRole("button", {
-      name: "Move task 2: Second task earlier",
-    });
-    await user.click(moveEarlier);
+    const secondCard = (await screen.findByText("Second task")).closest(
+      ".task-item",
+    );
+    const firstCard = screen.getByText("First task").closest(".task-item");
+    expect(secondCard).not.toBeNull();
+    expect(firstCard).not.toBeNull();
+    fireEvent.dragStart(secondCard as HTMLElement);
+    fireEvent.dragOver(firstCard as HTMLElement);
+    fireEvent.drop(firstCard as HTMLElement);
 
     await waitFor(() => {
       expect(
@@ -948,7 +1031,6 @@ describe("BoardPage week navigation", () => {
           document.querySelectorAll(".week-section-content .task-title"),
         ).map((title) => title.textContent),
       ).toEqual(["Second task", "First task"]);
-      expect(moveEarlier).toHaveFocus();
     });
     expect(storedTasks.map((task) => task.id)).toEqual([
       "second-task",
@@ -957,7 +1039,6 @@ describe("BoardPage week navigation", () => {
   });
 
   it("restores the previous lane order and announces reorder failures", async () => {
-    const user = userEvent.setup();
     const firstTask = withOrder(makeTask("first-task", "First task", null), 0);
     const secondTask = withOrder(
       makeTask("second-task", "Second task", null),
@@ -986,11 +1067,15 @@ describe("BoardPage week navigation", () => {
       </MemoryRouter>,
     );
 
-    await user.click(
-      await screen.findByRole("button", {
-        name: "Move task 2: Second task earlier",
-      }),
+    const secondCard = (await screen.findByText("Second task")).closest(
+      ".task-item",
     );
+    const firstCard = screen.getByText("First task").closest(".task-item");
+    expect(secondCard).not.toBeNull();
+    expect(firstCard).not.toBeNull();
+    fireEvent.dragStart(secondCard as HTMLElement);
+    fireEvent.dragOver(firstCard as HTMLElement);
+    fireEvent.drop(firstCard as HTMLElement);
 
     await waitFor(() => {
       expect(screen.getByRole("status")).toHaveTextContent(

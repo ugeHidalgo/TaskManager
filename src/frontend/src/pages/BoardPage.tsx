@@ -7,6 +7,7 @@ import {
   deleteTask,
   getBoardForWeek,
   getTasksForWeek,
+  moveTask,
   reorderTasks,
   updateTask,
   type SaveTaskInput,
@@ -158,9 +159,155 @@ export function BoardPage() {
     setSelectedDate(new Date());
   }
 
+  function getDotNetUtcTicks(value: string): string {
+    const fractionalSeconds =
+      value.match(/\.(\d+)(?:Z|[+-]\d\d:\d\d)$/)?.[1] ?? "";
+    const fractionalTicks = BigInt(fractionalSeconds.padEnd(7, "0"));
+    const millisecondFraction = BigInt(
+      fractionalSeconds.padEnd(3, "0").slice(0, 3),
+    );
+    const unixEpochTicks = 621355968000000000n;
+    const millisecondsSinceUnixEpoch = BigInt(new Date(value).getTime());
+
+    return (
+      unixEpochTicks +
+      millisecondsSinceUnixEpoch * 10000n +
+      fractionalTicks -
+      millisecondFraction * 10000n
+    ).toString();
+  }
+
+  async function getWeekSnapshotVersion(
+    weekStartDateValue: string,
+    weekTasks: TaskPayload[],
+  ) {
+    const orderedTasks = [...weekTasks].sort((left, right) => {
+      const leftKey = left.dayDate ?? "0000-00-00";
+      const rightKey = right.dayDate ?? "0000-00-00";
+      return (
+        leftKey.localeCompare(rightKey) ||
+        (left.orderIndex ?? Number.MAX_SAFE_INTEGER) -
+          (right.orderIndex ?? Number.MAX_SAFE_INTEGER) ||
+        left.id.localeCompare(right.id)
+      );
+    });
+
+    let snapshotContent = `${weekStartDateValue}`;
+    for (const task of orderedTasks) {
+      snapshotContent += `|${task.id}|${task.dayDate ?? "shared"}|${task.orderIndex ?? 0}|${task.title}|${task.notes ?? ""}|${task.status}|${task.executionTime}|${getDotNetUtcTicks(task.updatedAtUtc)}`;
+    }
+
+    const hashBuffer = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(snapshotContent),
+    );
+    return Array.from(new Uint8Array(hashBuffer), (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    )
+      .join("")
+      .toUpperCase();
+  }
+
+  async function handleMoveTask(
+    taskId: string,
+    sourceDayDate: string | null,
+    destinationDayDate: string | null,
+    destinationIndex: number,
+  ) {
+    if (!token) {
+      return;
+    }
+
+    const sourceWeekStartDate = weekStartDateParam;
+    const sourceWeekDate = new Date(`${sourceWeekStartDate}T00:00:00`);
+    const sourceTasks = await getTasksForWeek(token, sourceWeekDate);
+    const sourceBoard = await getBoardForWeek(token, sourceWeekDate);
+    const sourceLaneTasks = sortTasks(
+      sourceTasks.filter((task) => task.dayDate === sourceDayDate),
+    );
+    const sourceIndex = sourceLaneTasks.findIndex((task) => task.id === taskId);
+    if (sourceIndex < 0) {
+      return;
+    }
+
+    const destinationWeekStartDate = weekStartDateParam;
+    const destinationTasks =
+      destinationWeekStartDate === sourceWeekStartDate
+        ? sourceTasks
+        : await getTasksForWeek(
+            token,
+            new Date(`${destinationWeekStartDate}T00:00:00`),
+          );
+    const destinationLaneTasks = sortTasks(
+      destinationTasks.filter((task) => task.dayDate === destinationDayDate),
+    );
+    const normalizedDestinationIndex = Math.max(
+      0,
+      Math.min(destinationIndex, destinationLaneTasks.length),
+    );
+    const sourceSnapshotVersion =
+      sourceBoard.snapshotVersion ??
+      (await getWeekSnapshotVersion(sourceWeekStartDate, sourceTasks));
+    const destinationSnapshotVersion =
+      destinationWeekStartDate === sourceWeekStartDate
+        ? sourceSnapshotVersion
+        : await getWeekSnapshotVersion(
+            destinationWeekStartDate,
+            destinationTasks,
+          );
+
+    try {
+      const response = await moveTask(token, taskId, {
+        sourceWeekStartDate,
+        sourceDayDate,
+        sourceIndex,
+        destinationWeekStartDate: destinationWeekStartDate,
+        destinationDayDate,
+        destinationIndex: normalizedDestinationIndex,
+        sourceSnapshotVersion,
+        destinationSnapshotVersion,
+      });
+
+      if (destinationWeekStartDate === weekStartDateParam) {
+        setTasks(response.destination.tasks);
+      } else if (sourceWeekStartDate === weekStartDateParam) {
+        setTasks(response.source.tasks);
+      } else {
+        const refreshedTasks = await getTasksForWeek(token, weekStart);
+        setTasks(refreshedTasks);
+      }
+
+      setSaveMessage("Task moved.");
+      setStatusMessagePhase(null);
+    } catch (error) {
+      setSaveMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not move the task. Please try again.",
+      );
+      setStatusMessagePhase(null);
+    }
+  }
+
   function handleViewModeChange(mode: BoardViewMode) {
     setViewMode(mode);
     window.localStorage.setItem(BOARD_VIEW_MODE_KEY, mode);
+  }
+
+  function handleCrossLaneDrop(
+    taskId: string,
+    sourceLaneKey: string,
+    destinationDayDate: string | null,
+    destinationIndex: number,
+  ) {
+    const sourceDayDate = sourceLaneKey === "shared" ? null : sourceLaneKey;
+    void handleMoveTask(
+      taskId,
+      sourceDayDate,
+      destinationDayDate,
+      destinationIndex,
+    );
+    setDraggedTask(null);
   }
 
   async function handleTaskReorder(
@@ -450,6 +597,59 @@ export function BoardPage() {
         viewMode={viewMode}
         taskActionsDisabled={disableTaskActions}
         onAddTask={(dayDate) => openTaskEditor(dayDate)}
+        onWeekLaneDragOver={(event) => {
+          if (!draggedTask || draggedTask.laneKey === "shared") {
+            return;
+          }
+          event.preventDefault();
+        }}
+        onWeekLaneDrop={(event) => {
+          event.preventDefault();
+          if (!draggedTask || draggedTask.laneKey === "shared") {
+            return;
+          }
+          const sourceDayDate = draggedTask.laneKey;
+          if (sourceDayDate === "shared") {
+            return;
+          }
+          const destinationIndex = sortTasks(
+            visibleTasks.filter((task) => task.dayDate === null),
+          ).length;
+          void handleMoveTask(
+            draggedTask.taskId,
+            sourceDayDate,
+            null,
+            destinationIndex,
+          );
+          setDraggedTask(null);
+        }}
+        onDayLaneDragOver={(event) => {
+          if (!draggedTask) {
+            return;
+          }
+          event.preventDefault();
+        }}
+        onDayLaneDrop={(event, dayDate) => {
+          event.preventDefault();
+          if (!draggedTask) {
+            return;
+          }
+          const sourceDayDate =
+            draggedTask.laneKey === "shared" ? null : draggedTask.laneKey;
+          if (sourceDayDate === dayDate) {
+            return;
+          }
+          const destinationIndex = sortTasks(
+            visibleTasks.filter((task) => task.dayDate === dayDate),
+          ).length;
+          void handleMoveTask(
+            draggedTask.taskId,
+            sourceDayDate,
+            dayDate,
+            destinationIndex,
+          );
+          setDraggedTask(null);
+        }}
         weekContent={renderTasks(
           sortTasks(visibleTasks.filter((task) => task.dayDate === null)),
           null,
@@ -457,6 +657,7 @@ export function BoardPage() {
           handleTaskStatusToggle,
           handleTaskDelete,
           handleTaskReorder,
+          handleCrossLaneDrop,
           draggedTask,
           setDraggedTask,
           dropTarget,
@@ -476,6 +677,7 @@ export function BoardPage() {
             handleTaskStatusToggle,
             handleTaskDelete,
             handleTaskReorder,
+            handleCrossLaneDrop,
             draggedTask,
             setDraggedTask,
             dropTarget,
@@ -516,6 +718,12 @@ function renderTasks(
     sourceTaskId: string,
     targetIndex: number,
   ) => void,
+  onCrossLaneDrop: (
+    taskId: string,
+    sourceLaneKey: string,
+    destinationDayDate: string | null,
+    destinationIndex: number,
+  ) => void,
   draggedTask: { taskId: string; laneKey: string } | null,
   setDraggedTask: (value: { taskId: string; laneKey: string } | null) => void,
   dropTarget: { laneKey: string; taskId: string } | null,
@@ -539,11 +747,6 @@ function renderTasks(
     const taskIndex = tasks.findIndex((laneTask) => laneTask.id === task.id);
     const isDropTarget =
       dropTarget?.laneKey === laneKey && dropTarget.taskId === task.id;
-    const canMoveEarlier = taskIndex > 0;
-    const canMoveLater = taskIndex < tasks.length - 1;
-    const moveTask = (targetIndex: number) => {
-      void onReorder(tasks, dayDate, task.id, targetIndex);
-    };
 
     return (
       <div
@@ -557,10 +760,7 @@ function renderTasks(
           setDropTarget(null);
         }}
         onDragOver={(event) => {
-          if (
-            draggedTask?.laneKey !== laneKey ||
-            draggedTask.taskId === task.id
-          ) {
+          if (!draggedTask || draggedTask.taskId === task.id) {
             return;
           }
           event.preventDefault();
@@ -568,10 +768,17 @@ function renderTasks(
         }}
         onDrop={(event) => {
           event.preventDefault();
-          if (
-            draggedTask?.laneKey !== laneKey ||
-            draggedTask.taskId === task.id
-          ) {
+          event.stopPropagation();
+          if (!draggedTask || draggedTask.taskId === task.id) {
+            return;
+          }
+          if (draggedTask.laneKey !== laneKey) {
+            onCrossLaneDrop(
+              draggedTask.taskId,
+              draggedTask.laneKey,
+              dayDate,
+              taskIndex,
+            );
             return;
           }
           const sourceIndex = tasks.findIndex(
@@ -640,30 +847,6 @@ function renderTasks(
               title="Delete task"
             >
               ✕
-            </button>
-            <button
-              type="button"
-              className="task-reorder-button"
-              disabled={disableTaskActions || !canMoveEarlier}
-              onClick={() => moveTask(taskIndex - 1)}
-              aria-label={`Move task ${taskPosition}: ${task.title} earlier`}
-              data-task-reorder-id={task.id}
-              data-direction="up"
-              title="Move earlier"
-            >
-              ↑
-            </button>
-            <button
-              type="button"
-              className="task-reorder-button"
-              disabled={disableTaskActions || !canMoveLater}
-              onClick={() => moveTask(taskIndex + 1)}
-              aria-label={`Move task ${taskPosition}: ${task.title} later`}
-              data-task-reorder-id={task.id}
-              data-direction="down"
-              title="Move later"
-            >
-              ↓
             </button>
             {task.status === "In Progress" ? (
               <span className="task-progress-label">In progress</span>

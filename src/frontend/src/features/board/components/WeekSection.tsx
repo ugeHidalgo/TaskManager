@@ -9,6 +9,8 @@ export interface WeekSectionProps {
   children?: ReactNode;
   disabled?: boolean;
   onAddTask?: () => void;
+  onLaneDragOver?: (event: React.DragEvent<HTMLElement>) => void;
+  onLaneDrop?: (event: React.DragEvent<HTMLElement>) => void;
 }
 
 /**
@@ -19,11 +21,18 @@ export function WeekSection({
   children,
   disabled = false,
   onAddTask,
+  onLaneDragOver,
+  onLaneDrop,
 }: WeekSectionProps) {
   const headingId = "week-section-title";
 
   return (
-    <section className="week-section" aria-label="Week tasks">
+    <section
+      className="week-section"
+      aria-label="Week tasks"
+      onDragOver={onLaneDragOver}
+      onDrop={onLaneDrop}
+    >
       <header className="week-section-header">
         <h2 id={headingId} className="week-section-title">
           Week Tasks
@@ -44,6 +53,8 @@ export function WeekSection({
         className="week-section-content"
         role="region"
         aria-labelledby={headingId}
+        onDragOver={onLaneDragOver}
+        onDrop={onLaneDrop}
       >
         {children || (
           <div className="empty-state">

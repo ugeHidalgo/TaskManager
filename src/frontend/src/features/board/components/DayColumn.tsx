@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { formatDateOnly } from "../../../api/board";
 
 export interface DayColumnProps {
   /** The date for this day */
@@ -9,6 +10,11 @@ export interface DayColumnProps {
   children?: ReactNode;
   disabled?: boolean;
   onAddTask?: () => void;
+  onLaneDragOver?: (
+    event: React.DragEvent<HTMLElement>,
+    dayDate: string,
+  ) => void;
+  onLaneDrop?: (event: React.DragEvent<HTMLElement>, dayDate: string) => void;
 }
 
 /**
@@ -21,14 +27,22 @@ export function DayColumn({
   children,
   disabled = false,
   onAddTask,
+  onLaneDragOver,
+  onLaneDrop,
 }: DayColumnProps) {
   const formattedDate = formatDate(date);
-  const dayKey = `${dayName.toLowerCase()}-${date.toISOString().slice(0, 10)}`;
+  const isoDate = formatDateOnly(date);
+  const dayKey = `${dayName.toLowerCase()}-${isoDate}`;
   const headingId = `day-column-title-${dayKey}`;
   const regionId = `day-column-region-${dayKey}`;
 
   return (
-    <section className="day-column" aria-label={`${dayName} ${formattedDate}`}>
+    <section
+      className="day-column"
+      aria-label={`${dayName} ${formattedDate}`}
+      onDragOver={(event) => onLaneDragOver?.(event, isoDate)}
+      onDrop={(event) => onLaneDrop?.(event, isoDate)}
+    >
       <header className="day-column-header">
         <h3 id={headingId} className="day-column-title">
           {dayName}
@@ -51,6 +65,8 @@ export function DayColumn({
         className="day-column-content"
         role="region"
         aria-labelledby={headingId}
+        onDragOver={(event) => onLaneDragOver?.(event, isoDate)}
+        onDrop={(event) => onLaneDrop?.(event, isoDate)}
       >
         {children || (
           <div className="empty-state">

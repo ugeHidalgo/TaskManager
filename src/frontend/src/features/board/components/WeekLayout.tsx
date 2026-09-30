@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { formatDateOnly } from "../../../api/board";
 import { DayColumn } from "./DayColumn";
 import { WeekSection } from "./WeekSection";
 
@@ -16,6 +17,16 @@ export interface WeekLayoutProps {
   /** Prevent creating/editing tasks while a board mutation is pending */
   taskActionsDisabled?: boolean;
   onAddTask?: (dayDate: Date | null) => void;
+  onWeekLaneDragOver?: (event: React.DragEvent<HTMLElement>) => void;
+  onWeekLaneDrop?: (event: React.DragEvent<HTMLElement>) => void;
+  onDayLaneDragOver?: (
+    event: React.DragEvent<HTMLElement>,
+    dayDate: string,
+  ) => void;
+  onDayLaneDrop?: (
+    event: React.DragEvent<HTMLElement>,
+    dayDate: string,
+  ) => void;
 }
 
 export type BoardViewMode = "workweek" | "fullweek";
@@ -37,6 +48,10 @@ export function WeekLayout({
   viewMode = "workweek",
   taskActionsDisabled = false,
   onAddTask,
+  onWeekLaneDragOver,
+  onWeekLaneDrop,
+  onDayLaneDragOver,
+  onDayLaneDrop,
 }: WeekLayoutProps) {
   const dayDates = getDayDatesInWeek(weekStart);
   const dayNames = [
@@ -59,6 +74,8 @@ export function WeekLayout({
         weekEnd={weekEnd}
         disabled={taskActionsDisabled}
         onAddTask={() => onAddTask?.(null)}
+        onLaneDragOver={onWeekLaneDragOver}
+        onLaneDrop={onWeekLaneDrop}
       >
         {weekContent}
       </WeekSection>
@@ -72,6 +89,10 @@ export function WeekLayout({
             dayName={dayNames[index]}
             disabled={taskActionsDisabled}
             onAddTask={() => onAddTask?.(date)}
+            onLaneDragOver={(event) =>
+              onDayLaneDragOver?.(event, formatDateOnly(date))
+            }
+            onLaneDrop={(event) => onDayLaneDrop?.(event, formatDateOnly(date))}
           >
             {dayContent?.[index]}
           </DayColumn>

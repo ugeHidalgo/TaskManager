@@ -64,11 +64,13 @@ public sealed class TaskManagerFacade
         }
 
         var lanes = DeserializeLanes(workspace.LanesJson);
+        var snapshot = await CreateWeekSnapshotAsync(dbContext, workspace, cancellationToken);
 
         var payload = new
         {
             weekStartDate = requestedWeekStartDate,
             lanes,
+            snapshotVersion = snapshot.SnapshotVersion,
         };
 
         return Results.Ok(ApiSuccessResponse<object>.Create(payload, httpContext.TraceIdentifier));

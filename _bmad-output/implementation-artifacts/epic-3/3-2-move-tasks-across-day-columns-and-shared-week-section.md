@@ -56,12 +56,11 @@ so that I can reassign work without recreating it.
 
 ### Task 3 - Board and context-menu flow
 
-- [ ] Add lane-level drop targets for day and shared-week sections, including full-week weekend lanes when visible.
-- [ ] Refetch or reconcile both affected weeks after a successful same-week or cross-week move.
-- [ ] Implement pending-move state independently from task drafts; preserve it across week navigation without persisting until `Move here`.
-- [ ] Add `Move` to the task context menu and `Move here` to valid destination lane menus.
-- [ ] Clear pending move on cancel, outside click, logout, or invalidated session.
-- [ ] Keep task card edit, delete, completion, and execution-time controls functional after a move.
+- [x] Add lane-level drop targets for day and shared-week sections, including full-week weekend lanes when visible.
+- [x] Reconcile the affected week from authoritative move snapshots after a successful same-week move.
+- [x] Implement direct drag-and-drop between lanes and within a lane without a separate pending-move mode.
+- [x] Remove the obsolete per-task move-up and move-down buttons; mouse drag-and-drop is the supported ordering interaction.
+- [x] Keep task card edit, delete, completion, and execution-time controls functional after a move.
 
 ### Task 4 - Tests and validation
 
