@@ -5,6 +5,7 @@ import {
   formatDateOnly,
   getBoardForWeek,
   getTasksForWeek,
+  reorderTasks,
   updateTask,
 } from "./board";
 
@@ -130,6 +131,40 @@ describe("board api", () => {
           notes: null,
           status: "In Progress",
           executionTime: "13:30",
+        }),
+      }),
+    );
+  });
+
+  it("reorders a lane and returns the authoritative task snapshot", async () => {
+    const lane = {
+      weekStartDate: "2026-08-03",
+      dayDate: null,
+      tasks: [{ id: "task-2", orderIndex: 0 }],
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: lane }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await expect(
+      reorderTasks("jwt-token", {
+        weekStartDate: "2026-08-03",
+        dayDate: null,
+        taskIds: ["task-2", "task-1"],
+      }),
+    ).resolves.toEqual(lane);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/tasks\/reorder$/),
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          weekStartDate: "2026-08-03",
+          dayDate: null,
+          taskIds: ["task-2", "task-1"],
         }),
       }),
     );

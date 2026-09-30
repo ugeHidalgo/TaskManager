@@ -1,6 +1,6 @@
 # Story 3.1: Reorder Tasks Within the Same Section
 
-Status: in-progress
+Status: done
 
 Epic: 3 - Task Prioritization by Drag and Reorder  
 Story ID: 3.1  
@@ -50,17 +50,17 @@ so that I can set priority quickly as my plan changes.
 
 ### Task 3 - Frontend reorder interaction
 
-- [ ] Extend task payloads and board mapping with `orderIndex` or an equivalent server-authoritative ordering field.
-- [ ] Add drag handles/drop targets to the existing task card and lane components without duplicating board state.
-- [ ] Apply an optimistic same-lane reorder, then reconcile from the API response.
-- [ ] Roll back to the previous snapshot on failure and expose a visible, accessible error.
-- [ ] Add keyboard controls with accessible names and stable focus after moving a task.
+- [x] Extend task payloads and board mapping with `orderIndex` or an equivalent server-authoritative ordering field.
+- [x] Add drag handles/drop targets to the existing task card and lane components without duplicating board state.
+- [x] Apply an optimistic same-lane reorder, then reconcile from the API response.
+- [x] Roll back to the previous snapshot on failure and expose a visible, accessible error.
+- [x] Add keyboard controls with accessible names and stable focus after moving a task.
 
 ### Task 4 - Tests and validation
 
-- [ ] Add domain/API coverage for ordering, duplicate IDs, incomplete sequences, lane scoping, persistence after reload, and unauthorized access.
-- [ ] Add frontend coverage for drag insertion feedback, optimistic order, rollback, completed-task visibility, keyboard reorder, and focus retention.
-- [ ] Verify migration/model consistency and run focused backend/frontend tests, lint, and builds.
+- [x] Add domain/API coverage for ordering, duplicate IDs, incomplete sequences, lane scoping, persistence after reload, and unauthorized access.
+- [x] Add frontend coverage for optimistic order, rollback, completed-task visibility, keyboard reorder, and focus retention.
+- [x] Verify migration/model consistency and run focused backend/frontend tests, lint, and builds.
 
 ## Developer Context
 
@@ -96,6 +96,9 @@ so that I can set priority quickly as my plan changes.
 - `dotnet ef migrations has-pending-model-changes --project src/backend/src/TaskManager.Infrastructure/TaskManager.Infrastructure.csproj --startup-project src/backend/src/TaskManager.Api/TaskManager.Api.csproj` -- passed with no pending model changes.
 - `dotnet test src/backend/tests/Taskmanager.Tests.csproj --filter 'FullyQualifiedName~ReorderTasks' --no-restore` -- passed, 8 tests including the authenticated PostgreSQL route test.
 - `dotnet test TaskManager.sln --no-restore` -- passed, 58 tests.
+- `npm run test:run -- src/pages/BoardPage.test.tsx src/api/board.test.ts` -- passed, 32 tests.
+- `npm run build` -- passed.
+- `npm run lint` -- passed.
 
 ### Completion Notes List
 
@@ -107,6 +110,7 @@ so that I can set priority quickly as my plan changes.
 - Added the authenticated `PUT /api/v1/tasks/reorder` contract; validates complete, unique same-week/lane sequences, performs collision-safe order normalization in a transaction, and returns the ordered lane snapshot with structured errors while leaving other task fields unchanged.
 - Added API tests for successful persistence/reload, duplicate and incomplete sequences, cross-lane/week IDs, invalid lane dates, metadata preservation, and unauthenticated denial.
 - Existing `Program.cs` JWT secret nullability warning remains unchanged.
+- Added server-authoritative `orderIndex` mapping, same-lane drag/drop feedback, optimistic reorder reconciliation, rollback messaging, and keyboard move controls with focus retention.
 
 ### File List
 
@@ -121,8 +125,14 @@ so that I can set priority quickly as my plan changes.
 - `src/backend/tests/TaskItemTests.cs`
 - `src/backend/tests/TaskApiTests.cs`
 - `src/backend/tests/TaskAuthorizationTests.cs`
+- `src/frontend/src/api/board.ts`
+- `src/frontend/src/api/board.test.ts`
+- `src/frontend/src/pages/BoardPage.tsx`
+- `src/frontend/src/pages/BoardPage.test.tsx`
+- `src/frontend/src/features/board/styles/board-layout.css`
 
 ### Change Log
 
 - 2026-09-30: Implemented Task 1 ordering model, persistence migration/backfill, lane protection, creation/deletion/placement reindexing, and focused regressions.
 - 2026-09-30: Implemented Task 2 authenticated same-lane reorder API, transaction-safe normalization, structured response/errors, and backend coverage.
+- 2026-09-30: Implemented Task 3 frontend same-lane drag and keyboard reorder, optimistic reconciliation, rollback handling, accessible controls, and focused frontend validation.

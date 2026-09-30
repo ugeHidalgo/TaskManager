@@ -179,6 +179,43 @@
   min-height: 2rem;
 }
 
+.task-drag-handle,
+.task-reorder-button {
+  min-width: 2rem;
+  padding: 0.35rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.task-drag-handle {
+  cursor: grab;
+  letter-spacing: -0.15rem;
+}
+
+.task-drag-handle:hover:not(:disabled),
+.task-drag-handle:focus-visible,
+.task-reorder-button:hover:not(:disabled),
+.task-reorder-button:focus-visible {
+  background: transparent;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.task-item-drop-target {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.15);
+}
+
+.task-drop-indicator {
+  display: block;
+  margin: -0.35rem 0 0.25rem;
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 .task-completion-checkbox {
   flex: 0 0 auto;
   width: 1rem;
@@ -190,7 +227,9 @@
 
 .task-completion-checkbox:focus-visible,
 .edit-task-button:focus-visible,
-.delete-task-button:focus-visible {
+.delete-task-button:focus-visible,
+.task-drag-handle:focus-visible,
+.task-reorder-button:focus-visible {
   outline: 3px solid #2563eb;
   outline-offset: 2px;
 }

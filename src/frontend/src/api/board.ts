@@ -20,12 +20,25 @@ export interface TaskPayload {
   id: string;
   weekWorkspaceId: string;
   dayDate: string | null;
+  orderIndex?: number;
   title: string;
   notes: string | null;
   status: string;
   executionTime: string;
   createdAtUtc: string;
   updatedAtUtc: string;
+}
+
+export interface ReorderTasksInput {
+  weekStartDate: string;
+  dayDate: string | null;
+  taskIds: string[];
+}
+
+export interface ReorderedTaskLanePayload {
+  weekStartDate: string;
+  dayDate: string | null;
+  tasks: TaskPayload[];
 }
 
 export interface SaveTaskInput {
@@ -197,6 +210,18 @@ export function updateTask(
 ): Promise<TaskPayload> {
   return saveTaskRequest<TaskPayload>(
     `${apiBaseUrl}/tasks/${encodeURIComponent(taskId)}`,
+    "PUT",
+    token,
+    input,
+  );
+}
+
+export async function reorderTasks(
+  token: string,
+  input: ReorderTasksInput,
+): Promise<ReorderedTaskLanePayload> {
+  return saveTaskRequest<ReorderedTaskLanePayload>(
+    `${apiBaseUrl}/tasks/reorder`,
     "PUT",
     token,
     input,

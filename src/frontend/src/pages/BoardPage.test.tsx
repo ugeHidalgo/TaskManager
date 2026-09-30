@@ -81,6 +81,10 @@ function makeTask(
   };
 }
 
+function withOrder(task: ReturnType<typeof makeTask>, orderIndex: number) {
+  return { ...task, orderIndex };
+}
+
 describe("BoardPage week navigation", () => {
   afterEach(() => {
     window.localStorage.clear();
@@ -620,9 +624,12 @@ describe("BoardPage week navigation", () => {
     expect(
       Array.from(inProgressRows[1].children).map((child) => child.className),
     ).toEqual([
+      "task-drag-handle",
       "task-completion-checkbox",
       "edit-task-button",
       "delete-task-button",
+      "task-reorder-button",
+      "task-reorder-button",
       "task-progress-label",
     ]);
     expect(
@@ -630,7 +637,7 @@ describe("BoardPage week navigation", () => {
     ).toBeInTheDocument();
     expect(
       within(inProgressRows[1] as HTMLElement).getAllByRole("button"),
-    ).toHaveLength(2);
+    ).toHaveLength(5);
 
     const notStartedCard = screen
       .getByText("Not started title")
@@ -642,9 +649,12 @@ describe("BoardPage week navigation", () => {
     expect(
       Array.from(notStartedControls.children).map((child) => child.className),
     ).toEqual([
+      "task-drag-handle",
       "task-completion-checkbox",
       "edit-task-button",
       "delete-task-button",
+      "task-reorder-button",
+      "task-reorder-button",
       "task-not-started-label",
     ]);
     expect(notStartedCard.querySelector(".task-progress-label")).toBeNull();
@@ -680,6 +690,7 @@ describe("BoardPage week navigation", () => {
         name: "Task 3: Delete task: Completed title",
       }),
     ).toBeVisible();
+    expect(within(completedCard).getAllByRole("button")).toHaveLength(5);
   });
 
   it("cancels or confirms permanent task deletion", async () => {
@@ -882,6 +893,115 @@ describe("BoardPage week navigation", () => {
     expect(reopenCheckbox.closest(".task-item")).toHaveClass(
       "task-item-completed",
     );
+  });
+
+  it("moves a task with keyboard controls, persists the lane, and retains focus", async () => {
+    const user = userEvent.setup();
+    const firstTask = withOrder(makeTask("first-task", "First task", null), 0);
+    const secondTask = withOrder(
+      makeTask("second-task", "Second task", null),
+      1,
+    );
+    let storedTasks = [firstTask, secondTask];
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = new URL(String(input));
+      if (init?.method === "PUT" && url.pathname.endsWith("/reorder")) {
+        const body = JSON.parse(String(init.body)) as { taskIds: string[] };
+        storedTasks = body.taskIds.map((id, orderIndex) => ({
+          ...storedTasks.find((task) => task.id === id)!,
+          orderIndex,
+        }));
+        return new Response(
+          JSON.stringify({
+            data: {
+              weekStartDate: "2026-09-28",
+              dayDate: null,
+              tasks: storedTasks,
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url.pathname.endsWith("/tasks")) {
+        return new Response(JSON.stringify({ data: storedTasks }), {
+          status: 200,
+        });
+      }
+      return buildBoardResponseFromUrl(String(input));
+    });
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    const moveEarlier = await screen.findByRole("button", {
+      name: "Move task 2: Second task earlier",
+    });
+    await user.click(moveEarlier);
+
+    await waitFor(() => {
+      expect(
+        Array.from(
+          document.querySelectorAll(".week-section-content .task-title"),
+        ).map((title) => title.textContent),
+      ).toEqual(["Second task", "First task"]);
+      expect(moveEarlier).toHaveFocus();
+    });
+    expect(storedTasks.map((task) => task.id)).toEqual([
+      "second-task",
+      "first-task",
+    ]);
+  });
+
+  it("restores the previous lane order and announces reorder failures", async () => {
+    const user = userEvent.setup();
+    const firstTask = withOrder(makeTask("first-task", "First task", null), 0);
+    const secondTask = withOrder(
+      makeTask("second-task", "Second task", null),
+      1,
+    );
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = new URL(String(input));
+      if (init?.method === "PUT" && url.pathname.endsWith("/reorder")) {
+        return new Response(
+          JSON.stringify({ error: { message: "Order could not be saved." } }),
+          { status: 409 },
+        );
+      }
+      if (url.pathname.endsWith("/tasks")) {
+        return new Response(JSON.stringify({ data: [firstTask, secondTask] }), {
+          status: 200,
+        });
+      }
+      return buildBoardResponseFromUrl(String(input));
+    });
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Move task 2: Second task earlier",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Order could not be saved.",
+      );
+      expect(
+        Array.from(
+          document.querySelectorAll(".week-section-content .task-title"),
+        ).map((title) => title.textContent),
+      ).toEqual(["First task", "Second task"]);
+    });
   });
 
   it("opens the editor, validates the title, and cancels without saving", async () => {

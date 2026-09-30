@@ -7,6 +7,7 @@ import {
   deleteTask,
   getBoardForWeek,
   getTasksForWeek,
+  reorderTasks,
   updateTask,
   type SaveTaskInput,
   type TaskPayload,
@@ -47,6 +48,17 @@ export function BoardPage() {
   const [pendingDeleteTaskIds, setPendingDeleteTaskIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [pendingReorderLane, setPendingReorderLane] = useState<string | null>(
+    null,
+  );
+  const [draggedTask, setDraggedTask] = useState<{
+    taskId: string;
+    laneKey: string;
+  } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    laneKey: string;
+    taskId: string;
+  } | null>(null);
   const [loadedWeekStartDate, setLoadedWeekStartDate] = useState<string | null>(
     null,
   );
@@ -130,7 +142,8 @@ export function BoardPage() {
     isEditorOpen ||
     isSaving ||
     pendingStatusTaskIds.size > 0 ||
-    pendingDeleteTaskIds.size > 0;
+    pendingDeleteTaskIds.size > 0 ||
+    pendingReorderLane !== null;
   const taskAccessiblePositions = new Map(
     visibleTasks.map((task, index) => [task.id, index + 1]),
   );
@@ -148,6 +161,73 @@ export function BoardPage() {
   function handleViewModeChange(mode: BoardViewMode) {
     setViewMode(mode);
     window.localStorage.setItem(BOARD_VIEW_MODE_KEY, mode);
+  }
+
+  async function handleTaskReorder(
+    laneTasks: TaskPayload[],
+    dayDate: string | null,
+    sourceTaskId: string,
+    targetIndex: number,
+  ) {
+    if (!token || laneTasks.length < 2) {
+      return;
+    }
+
+    const orderedLaneTasks = sortTasks(laneTasks);
+    const sourceIndex = orderedLaneTasks.findIndex(
+      (task) => task.id === sourceTaskId,
+    );
+    if (sourceIndex < 0 || sourceIndex === targetIndex) {
+      return;
+    }
+
+    const previousLaneTasks = orderedLaneTasks;
+    const nextLaneTasks = [...orderedLaneTasks];
+    const [movedTask] = nextLaneTasks.splice(sourceIndex, 1);
+    nextLaneTasks.splice(targetIndex, 0, movedTask);
+    const laneKey = getLaneKey(dayDate);
+    const optimisticLaneTasks = nextLaneTasks.map((task, index) => ({
+      ...task,
+      orderIndex: index,
+    }));
+
+    setPendingReorderLane(laneKey);
+    setTasks((currentTasks) =>
+      replaceLaneTasks(currentTasks, dayDate, optimisticLaneTasks),
+    );
+    setDropTarget(null);
+
+    try {
+      const response = await reorderTasks(token, {
+        weekStartDate: weekStartDateParam,
+        dayDate,
+        taskIds: optimisticLaneTasks.map((task) => task.id),
+      });
+      setTasks((currentTasks) =>
+        replaceLaneTasks(currentTasks, dayDate, response.tasks),
+      );
+      setSaveMessage("Task order updated.");
+      setStatusMessagePhase(null);
+    } catch (error) {
+      setTasks((currentTasks) =>
+        replaceLaneTasks(currentTasks, dayDate, previousLaneTasks),
+      );
+      setSaveMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not reorder tasks. Reload the lane and try again.",
+      );
+      setStatusMessagePhase(null);
+    } finally {
+      setPendingReorderLane(null);
+      window.requestAnimationFrame(() => {
+        document
+          .querySelector<HTMLElement>(
+            `[data-task-reorder-id="${sourceTaskId}"]`,
+          )
+          ?.focus();
+      });
+    }
   }
 
   function openTaskEditor(dayDate: Date | null, task?: TaskPayload) {
@@ -371,10 +451,16 @@ export function BoardPage() {
         taskActionsDisabled={disableTaskActions}
         onAddTask={(dayDate) => openTaskEditor(dayDate)}
         weekContent={renderTasks(
-          visibleTasks.filter((task) => task.dayDate === null),
+          sortTasks(visibleTasks.filter((task) => task.dayDate === null)),
+          null,
           (task) => openTaskEditor(null, task),
           handleTaskStatusToggle,
           handleTaskDelete,
+          handleTaskReorder,
+          draggedTask,
+          setDraggedTask,
+          dropTarget,
+          setDropTarget,
           pendingStatusTaskIds,
           pendingDeleteTaskIds,
           taskAccessiblePositions,
@@ -384,10 +470,16 @@ export function BoardPage() {
           const dayDate = formatDateOnly(shiftDateByDays(weekStart, dayIndex));
 
           return renderTasks(
-            visibleTasks.filter((task) => task.dayDate === dayDate),
+            sortTasks(visibleTasks.filter((task) => task.dayDate === dayDate)),
+            dayDate,
             (task) => openTaskEditor(new Date(`${dayDate}T00:00:00`), task),
             handleTaskStatusToggle,
             handleTaskDelete,
+            handleTaskReorder,
+            draggedTask,
+            setDraggedTask,
+            dropTarget,
+            setDropTarget,
             pendingStatusTaskIds,
             pendingDeleteTaskIds,
             taskAccessiblePositions,
@@ -414,9 +506,20 @@ export function BoardPage() {
 
 function renderTasks(
   tasks: TaskPayload[],
+  dayDate: string | null,
   onEdit: (task: TaskPayload) => void,
   onStatusToggle: (task: TaskPayload) => void,
   onDelete: (task: TaskPayload) => void,
+  onReorder: (
+    laneTasks: TaskPayload[],
+    dayDate: string | null,
+    sourceTaskId: string,
+    targetIndex: number,
+  ) => void,
+  draggedTask: { taskId: string; laneKey: string } | null,
+  setDraggedTask: (value: { taskId: string; laneKey: string } | null) => void,
+  dropTarget: { laneKey: string; taskId: string } | null,
+  setDropTarget: (value: { laneKey: string; taskId: string } | null) => void,
   pendingStatusTaskIds: ReadonlySet<string>,
   pendingDeleteTaskIds: ReadonlySet<string>,
   taskAccessiblePositions: ReadonlyMap<string, number>,
@@ -432,14 +535,58 @@ function renderTasks(
     const isUpdatingStatus = pendingStatusTaskIds.has(task.id);
     const isDeleting = pendingDeleteTaskIds.has(task.id);
     const taskPosition = taskAccessiblePositions.get(task.id) ?? 1;
+    const laneKey = getLaneKey(dayDate);
+    const taskIndex = tasks.findIndex((laneTask) => laneTask.id === task.id);
+    const isDropTarget =
+      dropTarget?.laneKey === laneKey && dropTarget.taskId === task.id;
+    const canMoveEarlier = taskIndex > 0;
+    const canMoveLater = taskIndex < tasks.length - 1;
+    const moveTask = (targetIndex: number) => {
+      void onReorder(tasks, dayDate, task.id, targetIndex);
+    };
 
     return (
       <div
         key={task.id}
-        className={`task-item${isCompleted ? " task-item-completed" : ""}`}
+        className={`task-item${isCompleted ? " task-item-completed" : ""}${isDropTarget ? " task-item-drop-target" : ""}`}
         aria-busy={isUpdatingStatus || isDeleting}
+        draggable={!disableTaskActions}
+        onDragStart={() => setDraggedTask({ taskId: task.id, laneKey })}
+        onDragEnd={() => {
+          setDraggedTask(null);
+          setDropTarget(null);
+        }}
+        onDragOver={(event) => {
+          if (
+            draggedTask?.laneKey !== laneKey ||
+            draggedTask.taskId === task.id
+          ) {
+            return;
+          }
+          event.preventDefault();
+          setDropTarget({ laneKey, taskId: task.id });
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          if (
+            draggedTask?.laneKey !== laneKey ||
+            draggedTask.taskId === task.id
+          ) {
+            return;
+          }
+          const sourceIndex = tasks.findIndex(
+            (laneTask) => laneTask.id === draggedTask.taskId,
+          );
+          const targetIndex =
+            sourceIndex < taskIndex ? taskIndex - 1 : taskIndex;
+          setDraggedTask(null);
+          void onReorder(tasks, dayDate, draggedTask.taskId, targetIndex);
+        }}
       >
         <div className="task-content">
+          {isDropTarget ? (
+            <span className="task-drop-indicator">Drop here</span>
+          ) : null}
           <div className="task-title-row">
             {task.dayDate !== null && task.executionTime ? (
               <time
@@ -456,6 +603,16 @@ function renderTasks(
             </strong>
           </div>
           <div className="task-controls-row">
+            <button
+              type="button"
+              className="task-drag-handle"
+              draggable={false}
+              disabled={disableTaskActions}
+              aria-label={`Drag task ${taskPosition}: ${task.title}`}
+              title="Drag to reorder"
+            >
+              ⋮⋮
+            </button>
             <input
               type="checkbox"
               className="task-completion-checkbox"
@@ -484,6 +641,30 @@ function renderTasks(
             >
               ✕
             </button>
+            <button
+              type="button"
+              className="task-reorder-button"
+              disabled={disableTaskActions || !canMoveEarlier}
+              onClick={() => moveTask(taskIndex - 1)}
+              aria-label={`Move task ${taskPosition}: ${task.title} earlier`}
+              data-task-reorder-id={task.id}
+              data-direction="up"
+              title="Move earlier"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="task-reorder-button"
+              disabled={disableTaskActions || !canMoveLater}
+              onClick={() => moveTask(taskIndex + 1)}
+              aria-label={`Move task ${taskPosition}: ${task.title} later`}
+              data-task-reorder-id={task.id}
+              data-direction="down"
+              title="Move later"
+            >
+              ↓
+            </button>
             {task.status === "In Progress" ? (
               <span className="task-progress-label">In progress</span>
             ) : null}
@@ -498,6 +679,37 @@ function renderTasks(
       </div>
     );
   });
+}
+
+function getLaneKey(dayDate: string | null): string {
+  return dayDate ?? "shared";
+}
+
+function sortTasks(tasks: TaskPayload[]): TaskPayload[] {
+  return [...tasks].sort(
+    (left, right) =>
+      (left.orderIndex ?? Number.MAX_SAFE_INTEGER) -
+      (right.orderIndex ?? Number.MAX_SAFE_INTEGER),
+  );
+}
+
+function replaceLaneTasks(
+  allTasks: TaskPayload[],
+  dayDate: string | null,
+  laneTasks: TaskPayload[],
+): TaskPayload[] {
+  const laneTaskIds = new Set(
+    allTasks.filter((task) => task.dayDate === dayDate).map((task) => task.id),
+  );
+  const firstLaneIndex = allTasks.findIndex((task) => laneTaskIds.has(task.id));
+  const remainingTasks = allTasks.filter((task) => !laneTaskIds.has(task.id));
+  const insertionIndex =
+    firstLaneIndex < 0 ? remainingTasks.length : firstLaneIndex;
+  return [
+    ...remainingTasks.slice(0, insertionIndex),
+    ...laneTasks,
+    ...remainingTasks.slice(insertionIndex),
+  ];
 }
 
 function getNextTaskStatus(
