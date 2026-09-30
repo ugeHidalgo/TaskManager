@@ -62,10 +62,10 @@ development_status:
   2-6-protect-unsaved-changes-during-navigation: ready-for-dev
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-reorder-tasks-within-the-same-section: backlog
-  3-2-move-tasks-across-day-columns-and-shared-week-section: backlog
-  3-3-maintain-stable-order-semantics-and-visual-feedback: backlog
+  epic-3: in-progress
+  3-1-reorder-tasks-within-the-same-section: in-progress
+  3-2-move-tasks-across-day-columns-and-shared-week-section: ready-for-dev
+  3-3-maintain-stable-order-semantics-and-visual-feedback: ready-for-dev
   epic-3-retrospective: optional
 
   epic-4: backlog

@@ -20,6 +20,18 @@ public sealed class TaskItemTests
         Assert.Null(task.Notes);
         Assert.Equal("Not Started", task.Status);
         Assert.Equal(string.Empty, task.ExecutionTime);
+        Assert.Equal(0, task.OrderIndex);
+    }
+
+    [Fact]
+    public void SetOrderIndex_RejectsNegativeValues()
+    {
+        var task = TaskItem.Create(WorkspaceId, WeekStart, "Plan sprint");
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => task.SetOrderIndex(-1));
+
+        Assert.Equal("orderIndex", exception.ParamName);
+        Assert.Equal(0, task.OrderIndex);
     }
 
     [Theory]

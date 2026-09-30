@@ -68,6 +68,42 @@ public sealed class TaskApiTests
     }
 
     [Fact]
+    public async Task DeleteTaskAsync_CompactsOrderWithinTheSameLane()
+    {
+        var context = CreateContext();
+        await using var dbContext = CreateDbContext();
+        var dayDate = new DateOnly(2026, 8, 18);
+        var taskIds = new List<Guid>();
+
+        foreach (var title in new[] { "First", "Second", "Third" })
+        {
+            var result = await facade.CreateTaskAsync(
+                context,
+                new CreateTaskRequest(new DateOnly(2026, 8, 17), title, dayDate, null, null, string.Empty),
+                dbContext,
+                CancellationToken.None);
+
+            taskIds.Add(ToResponse(result).Body.RootElement.GetProperty("Data").GetProperty("Id").GetGuid());
+        }
+
+        context.Request.QueryString = new QueryString("?weekStartDate=2026-08-17");
+        var deleteResult = await facade.DeleteTaskAsync(
+            taskIds[1],
+            context,
+            dbContext,
+            CancellationToken.None);
+
+        Assert.IsType<Microsoft.AspNetCore.Http.HttpResults.NoContent>(deleteResult);
+        var remainingTasks = await dbContext.Tasks
+            .Where(task => task.DayDate == dayDate)
+            .OrderBy(task => task.OrderIndex)
+            .ToListAsync();
+
+        Assert.Equal(new[] { taskIds[0], taskIds[2] }, remainingTasks.Select(task => task.Id));
+        Assert.Equal(new[] { 0, 1 }, remainingTasks.Select(task => task.OrderIndex));
+    }
+
+    [Fact]
     public async Task CreateTaskAsync_ClearsExecutionTimeForSharedWeekPlacement()
     {
         var context = CreateContext();

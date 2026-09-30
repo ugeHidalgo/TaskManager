@@ -26,6 +26,8 @@ public sealed class TaskItem
 
     public string ExecutionTime { get; private set; } = string.Empty;
 
+    public int OrderIndex { get; private set; }
+
     public DateTime CreatedAtUtc { get; private set; }
 
     public DateTime UpdatedAtUtc { get; private set; }
@@ -85,6 +87,16 @@ public sealed class TaskItem
         ExecutionTime = normalizedExecutionTime;
         DayDate = dayDate;
         UpdatedAtUtc = DateTime.UtcNow;
+    }
+
+    public void SetOrderIndex(int orderIndex)
+    {
+        if (orderIndex < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(orderIndex), "Task order cannot be negative.");
+        }
+
+        OrderIndex = orderIndex;
     }
 
     private static void ValidateWorkspaceId(Guid weekWorkspaceId)

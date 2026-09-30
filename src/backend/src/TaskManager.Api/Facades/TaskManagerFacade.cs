@@ -120,7 +120,10 @@ public sealed class TaskManagerFacade
             ? []
             : await dbContext.Tasks
                 .Where(task => task.WeekWorkspaceId == workspace.Id)
-                .OrderBy(task => task.CreatedAtUtc)
+                .OrderBy(task => task.OrderIndex)
+                .ThenBy(task => task.CreatedAtUtc)
+                .ThenBy(task => task.DayDate)
+                .ThenBy(task => task.Id)
                 .Select(task => ToTaskResponse(task))
                 .ToListAsync(cancellationToken);
 
@@ -139,6 +142,11 @@ public sealed class TaskManagerFacade
         {
             var weekStartDate = ToMonday(request.WeekStartDate);
             var workspace = await GetOrCreateWorkspaceAsync(dbContext, weekStartDate, cancellationToken);
+            var orderIndex = await GetNextOrderIndexAsync(
+                dbContext,
+                workspace.Id,
+                request.DayDate,
+                cancellationToken);
             var task = TaskItem.Create(
                 workspace.Id,
                 weekStartDate,
@@ -147,6 +155,7 @@ public sealed class TaskManagerFacade
                 request.Notes,
                 request.Status,
                 request.ExecutionTime);
+            task.SetOrderIndex(orderIndex);
 
             dbContext.Tasks.Add(task);
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -221,6 +230,11 @@ public sealed class TaskManagerFacade
                     request.Status,
                     request.ExecutionTime,
                     batchId);
+                task.SetOrderIndex(await GetNextOrderIndexAsync(
+                    dbContext,
+                    workspace.Id,
+                    date,
+                    cancellationToken));
                 generatedTasks.Add(task);
                 affectedWeekStartDates.Add(weekStartDate);
                 dbContext.Tasks.Add(task);
@@ -273,6 +287,7 @@ public sealed class TaskManagerFacade
 
         try
         {
+            var sourceDayDate = task.DayDate;
             task.Update(
                 weekStartDate,
                 request.Title,
@@ -280,6 +295,21 @@ public sealed class TaskManagerFacade
                 request.Notes,
                 request.Status,
                 request.ExecutionTime);
+            if (sourceDayDate != task.DayDate)
+            {
+                await NormalizeLaneAsync(
+                    dbContext,
+                    task.WeekWorkspaceId,
+                    sourceDayDate,
+                    task.Id,
+                    cancellationToken);
+                task.SetOrderIndex(await GetNextOrderIndexAsync(
+                    dbContext,
+                    task.WeekWorkspaceId,
+                    task.DayDate,
+                    cancellationToken,
+                    task.Id));
+            }
             await dbContext.SaveChangesAsync(cancellationToken);
 
             return Results.Ok(ApiSuccessResponse<TaskResponse>.Create(
@@ -318,6 +348,12 @@ public sealed class TaskManagerFacade
                 requestId: httpContext.TraceIdentifier));
         }
 
+        await NormalizeLaneAsync(
+            dbContext,
+            task.WeekWorkspaceId,
+            task.DayDate,
+            task.Id,
+            cancellationToken);
         dbContext.Tasks.Remove(task);
         await dbContext.SaveChangesAsync(cancellationToken);
         return Results.NoContent();
@@ -350,8 +386,51 @@ public sealed class TaskManagerFacade
             task.Notes,
             task.Status,
             task.ExecutionTime,
+            task.OrderIndex,
             task.CreatedAtUtc,
             task.UpdatedAtUtc);
+    }
+
+    private static async Task<int> GetNextOrderIndexAsync(
+        TaskManagerDbContext dbContext,
+        Guid workspaceId,
+        DateOnly? dayDate,
+        CancellationToken cancellationToken,
+        Guid? excludedTaskId = null)
+    {
+        var query = dbContext.Tasks
+            .Where(task => task.WeekWorkspaceId == workspaceId && task.DayDate == dayDate);
+        if (excludedTaskId is not null)
+        {
+            query = query.Where(task => task.Id != excludedTaskId.Value);
+        }
+
+        var maximumOrderIndex = await query
+            .Select(task => (int?)task.OrderIndex)
+            .MaxAsync(cancellationToken);
+        return (maximumOrderIndex ?? -1) + 1;
+    }
+
+    private static async Task NormalizeLaneAsync(
+        TaskManagerDbContext dbContext,
+        Guid workspaceId,
+        DateOnly? dayDate,
+        Guid excludedTaskId,
+        CancellationToken cancellationToken)
+    {
+        var tasks = await dbContext.Tasks
+            .Where(task => task.WeekWorkspaceId == workspaceId
+                && task.DayDate == dayDate
+                && task.Id != excludedTaskId)
+            .OrderBy(task => task.OrderIndex)
+            .ThenBy(task => task.CreatedAtUtc)
+            .ThenBy(task => task.Id)
+            .ToListAsync(cancellationToken);
+
+        for (var index = 0; index < tasks.Count; index++)
+        {
+            tasks[index].SetOrderIndex(index);
+        }
     }
 
     private static RecurringTasksResponse ToRecurringTasksResponse(

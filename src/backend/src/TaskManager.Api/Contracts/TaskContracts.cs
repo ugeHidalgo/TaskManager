@@ -37,5 +37,6 @@ public sealed record TaskResponse(
     string? Notes,
     string Status,
     string ExecutionTime,
+    int OrderIndex,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc);

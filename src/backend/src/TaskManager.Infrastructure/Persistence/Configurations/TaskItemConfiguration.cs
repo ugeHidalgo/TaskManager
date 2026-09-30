@@ -44,6 +44,11 @@ public sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
             .IsRequired()
             .HasDefaultValue(string.Empty);
 
+        builder.Property(task => task.OrderIndex)
+            .HasColumnName("order_index")
+            .IsRequired()
+            .HasDefaultValue(0);
+
         builder.Property(task => task.CreatedAtUtc)
             .HasColumnName("created_at_utc")
             .IsRequired();
@@ -58,6 +63,7 @@ public sealed class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(task => new { task.WeekWorkspaceId, task.DayDate });
+        builder.HasIndex(task => new { task.WeekWorkspaceId, task.DayDate, task.OrderIndex });
         builder.HasIndex(task => task.BatchId);
     }
 }
