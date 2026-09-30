@@ -99,6 +99,22 @@ public sealed class TaskItem
         OrderIndex = orderIndex;
     }
 
+    public void MoveTo(Guid weekWorkspaceId, DateOnly weekStartDate, DateOnly? dayDate)
+    {
+        ValidateWorkspaceId(weekWorkspaceId);
+        var normalizedWeekStartDate = NormalizeWeekStart(weekStartDate);
+        ValidateDayDate(normalizedWeekStartDate, dayDate);
+
+        WeekWorkspaceId = weekWorkspaceId;
+        DayDate = dayDate;
+        if (dayDate is null)
+        {
+            ExecutionTime = string.Empty;
+        }
+
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
     private static void ValidateWorkspaceId(Guid weekWorkspaceId)
     {
         if (weekWorkspaceId == Guid.Empty)

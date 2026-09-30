@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using TaskManager.Application.Board;
 using TaskManager.Api.Contracts;
 using TaskManager.Api.Facades;
 using TaskManager.Infrastructure.Persistence;
@@ -659,6 +660,251 @@ public sealed class TaskApiTests
         Assert.Equal(StatusCodes.Status404NotFound, response.StatusCode);
         Assert.Equal("task.not_found", response.Body.RootElement.GetProperty("Error").GetProperty("Code").GetString());
         Assert.NotNull(await dbContext.Tasks.SingleOrDefaultAsync(candidate => candidate.Id == task.Id));
+    }
+
+    [Fact]
+    public async Task MoveTaskAsync_MovesAcrossWeeksAndReindexesBothLanes_PreservingTaskIdentityAndFields()
+    {
+        var sourceWeek = new DateOnly(2026, 8, 17);
+        var destinationWeek = new DateOnly(2026, 8, 24);
+        var sourceDay = new DateOnly(2026, 8, 19);
+        var destinationDay = new DateOnly(2026, 8, 25);
+        await using var dbContext = CreateDbContext();
+        var sourceWorkspace = TaskManager.Domain.Board.WeekWorkspace.Create(sourceWeek);
+        var destinationWorkspace = TaskManager.Domain.Board.WeekWorkspace.Create(destinationWeek);
+        var sourceFirst = TaskManager.Domain.Board.TaskItem.Create(sourceWorkspace.Id, sourceWeek, "Source first", sourceDay);
+        var movedTask = TaskManager.Domain.Board.TaskItem.Create(
+            sourceWorkspace.Id, sourceWeek, "Move me", sourceDay, "Keep these notes", "Completed", "09:30", "batch-7");
+        var sourceLast = TaskManager.Domain.Board.TaskItem.Create(sourceWorkspace.Id, sourceWeek, "Source last", sourceDay);
+        var destinationFirst = TaskManager.Domain.Board.TaskItem.Create(destinationWorkspace.Id, destinationWeek, "Destination first", destinationDay);
+        var destinationLast = TaskManager.Domain.Board.TaskItem.Create(destinationWorkspace.Id, destinationWeek, "Destination last", destinationDay);
+        sourceFirst.SetOrderIndex(0);
+        movedTask.SetOrderIndex(1);
+        sourceLast.SetOrderIndex(2);
+        destinationFirst.SetOrderIndex(0);
+        destinationLast.SetOrderIndex(1);
+        dbContext.WeekWorkspaces.AddRange(sourceWorkspace, destinationWorkspace);
+        dbContext.Tasks.AddRange(sourceFirst, movedTask, sourceLast, destinationFirst, destinationLast);
+        await dbContext.SaveChangesAsync();
+        var createdAt = movedTask.CreatedAtUtc;
+        var updatedAt = movedTask.UpdatedAtUtc;
+
+        await facade.MoveTaskAsync(
+            new MoveTaskCommand(
+                movedTask.Id,
+                new TaskLanePosition(new DateOnly(2026, 8, 19), sourceDay, 1),
+                new TaskLanePosition(new DateOnly(2026, 8, 26), destinationDay, 1)),
+            dbContext,
+            CancellationToken.None);
+
+        var sourceTasks = await dbContext.Tasks
+            .Where(task => task.WeekWorkspaceId == sourceWorkspace.Id)
+            .OrderBy(task => task.OrderIndex)
+            .ToListAsync();
+        var destinationTasks = await dbContext.Tasks
+            .Where(task => task.WeekWorkspaceId == destinationWorkspace.Id)
+            .OrderBy(task => task.OrderIndex)
+            .ToListAsync();
+        var persistedMovedTask = Assert.Single(destinationTasks, task => task.Id == movedTask.Id);
+
+        Assert.Equal(new[] { sourceFirst.Id, sourceLast.Id }, sourceTasks.Select(task => task.Id));
+        Assert.Equal(new[] { 0, 1 }, sourceTasks.Select(task => task.OrderIndex));
+        Assert.Equal(new[] { destinationFirst.Id, movedTask.Id, destinationLast.Id }, destinationTasks.Select(task => task.Id));
+        Assert.Equal(new[] { 0, 1, 2 }, destinationTasks.Select(task => task.OrderIndex));
+        Assert.Equal(destinationWorkspace.Id, persistedMovedTask.WeekWorkspaceId);
+        Assert.Equal(destinationDay, persistedMovedTask.DayDate);
+        Assert.Equal("Move me", persistedMovedTask.Title);
+        Assert.Equal("Keep these notes", persistedMovedTask.Notes);
+        Assert.Equal("Completed", persistedMovedTask.Status);
+        Assert.Equal("09:30", persistedMovedTask.ExecutionTime);
+        Assert.Equal("batch-7", persistedMovedTask.BatchId);
+        Assert.Equal(createdAt, persistedMovedTask.CreatedAtUtc);
+        Assert.True(persistedMovedTask.UpdatedAtUtc >= updatedAt);
+    }
+
+    [Fact]
+    public async Task MoveTaskAsync_MovingToSharedWeekClearsExecutionTimeAndCompactsSourceLane()
+    {
+        var weekStart = new DateOnly(2026, 8, 17);
+        var dayDate = new DateOnly(2026, 8, 18);
+        await using var dbContext = CreateDbContext();
+        var workspace = TaskManager.Domain.Board.WeekWorkspace.Create(weekStart);
+        var first = TaskManager.Domain.Board.TaskItem.Create(workspace.Id, weekStart, "First", dayDate);
+        var movedTask = TaskManager.Domain.Board.TaskItem.Create(
+            workspace.Id, weekStart, "Timed", dayDate, executionTime: "08:15");
+        var last = TaskManager.Domain.Board.TaskItem.Create(workspace.Id, weekStart, "Last", dayDate);
+        first.SetOrderIndex(0);
+        movedTask.SetOrderIndex(1);
+        last.SetOrderIndex(2);
+        dbContext.WeekWorkspaces.Add(workspace);
+        dbContext.Tasks.AddRange(first, movedTask, last);
+        await dbContext.SaveChangesAsync();
+
+        await facade.MoveTaskAsync(
+            new MoveTaskCommand(
+                movedTask.Id,
+                new TaskLanePosition(weekStart, dayDate, 1),
+                new TaskLanePosition(weekStart, null, 0)),
+            dbContext,
+            CancellationToken.None);
+
+        var persistedTasks = await dbContext.Tasks.OrderBy(task => task.OrderIndex).ToListAsync();
+        var persistedMovedTask = Assert.Single(persistedTasks, task => task.Id == movedTask.Id);
+
+        Assert.Equal(new[] { first.Id, last.Id }, persistedTasks.Where(task => task.DayDate == dayDate).OrderBy(task => task.OrderIndex).Select(task => task.Id));
+        Assert.Equal(new[] { 0, 1 }, persistedTasks.Where(task => task.DayDate == dayDate).OrderBy(task => task.OrderIndex).Select(task => task.OrderIndex));
+        Assert.Null(persistedMovedTask.DayDate);
+        Assert.Equal(string.Empty, persistedMovedTask.ExecutionTime);
+        Assert.Equal(0, persistedMovedTask.OrderIndex);
+    }
+
+    [Fact]
+    public async Task MoveTaskAsync_MovesBetweenDayLanesWithinTheSameWeek()
+    {
+        var weekStart = new DateOnly(2026, 8, 17);
+        var sourceDay = new DateOnly(2026, 8, 18);
+        var destinationDay = new DateOnly(2026, 8, 20);
+        await using var dbContext = CreateDbContext();
+        var workspace = TaskManager.Domain.Board.WeekWorkspace.Create(weekStart);
+        var sourceTask = TaskManager.Domain.Board.TaskItem.Create(
+            workspace.Id, weekStart, "Move across days", sourceDay, executionTime: "10:45");
+        var destinationTask = TaskManager.Domain.Board.TaskItem.Create(workspace.Id, weekStart, "Existing destination", destinationDay);
+        sourceTask.SetOrderIndex(0);
+        destinationTask.SetOrderIndex(0);
+        dbContext.WeekWorkspaces.Add(workspace);
+        dbContext.Tasks.AddRange(sourceTask, destinationTask);
+        await dbContext.SaveChangesAsync();
+
+        await facade.MoveTaskAsync(
+            new MoveTaskCommand(
+                sourceTask.Id,
+                new TaskLanePosition(weekStart, sourceDay, 0),
+                new TaskLanePosition(weekStart.AddDays(2), destinationDay, 0)),
+            dbContext,
+            CancellationToken.None);
+
+        var persistedTask = await dbContext.Tasks.SingleAsync(task => task.Id == sourceTask.Id);
+        Assert.Equal(workspace.Id, persistedTask.WeekWorkspaceId);
+        Assert.Equal(destinationDay, persistedTask.DayDate);
+        Assert.Equal(0, persistedTask.OrderIndex);
+        Assert.Equal("10:45", persistedTask.ExecutionTime);
+        Assert.Equal(2, await dbContext.Tasks.CountAsync(task => task.DayDate == destinationDay));
+        Assert.Equal(0, await dbContext.Tasks.CountAsync(task => task.DayDate == sourceDay));
+    }
+
+    [Fact]
+    public async Task MoveTaskAsync_MovesFromSharedWeekToDayAndPreservesTaskIdentity()
+    {
+        var weekStart = new DateOnly(2026, 8, 17);
+        var destinationDay = new DateOnly(2026, 8, 22);
+        await using var dbContext = CreateDbContext();
+        var workspace = TaskManager.Domain.Board.WeekWorkspace.Create(weekStart);
+        var sharedTask = TaskManager.Domain.Board.TaskItem.Create(
+            workspace.Id, weekStart, "Shared task", notes: "Keep notes", status: "In Progress");
+        var dayTask = TaskManager.Domain.Board.TaskItem.Create(workspace.Id, weekStart, "Day task", destinationDay);
+        sharedTask.SetOrderIndex(0);
+        dayTask.SetOrderIndex(0);
+        dbContext.WeekWorkspaces.Add(workspace);
+        dbContext.Tasks.AddRange(sharedTask, dayTask);
+        await dbContext.SaveChangesAsync();
+
+        await facade.MoveTaskAsync(
+            new MoveTaskCommand(
+                sharedTask.Id,
+                new TaskLanePosition(weekStart, null, 0),
+                new TaskLanePosition(weekStart, destinationDay, 0)),
+            dbContext,
+            CancellationToken.None);
+
+        var movedTask = await dbContext.Tasks.SingleAsync(task => task.Id == sharedTask.Id);
+        var destinationIds = await dbContext.Tasks
+            .Where(task => task.DayDate == destinationDay)
+            .OrderBy(task => task.OrderIndex)
+            .Select(task => task.Id)
+            .ToArrayAsync();
+        Assert.Equal(new[] { sharedTask.Id, dayTask.Id }, destinationIds);
+        Assert.Equal(workspace.Id, movedTask.WeekWorkspaceId);
+        Assert.Equal(destinationDay, movedTask.DayDate);
+        Assert.Equal(0, movedTask.OrderIndex);
+        Assert.Equal("Shared task", movedTask.Title);
+        Assert.Equal("Keep notes", movedTask.Notes);
+        Assert.Equal("In Progress", movedTask.Status);
+        Assert.Equal(string.Empty, movedTask.ExecutionTime);
+    }
+
+    [Fact]
+    public async Task MoveTaskAsync_ReordersWithinTheSameLane()
+    {
+        var weekStart = new DateOnly(2026, 8, 17);
+        var dayDate = new DateOnly(2026, 8, 18);
+        await using var dbContext = CreateDbContext();
+        var workspace = TaskManager.Domain.Board.WeekWorkspace.Create(weekStart);
+        var first = TaskManager.Domain.Board.TaskItem.Create(workspace.Id, weekStart, "First", dayDate);
+        var second = TaskManager.Domain.Board.TaskItem.Create(workspace.Id, weekStart, "Second", dayDate);
+        var third = TaskManager.Domain.Board.TaskItem.Create(workspace.Id, weekStart, "Third", dayDate);
+        first.SetOrderIndex(0);
+        second.SetOrderIndex(1);
+        third.SetOrderIndex(2);
+        dbContext.WeekWorkspaces.Add(workspace);
+        dbContext.Tasks.AddRange(first, second, third);
+        await dbContext.SaveChangesAsync();
+
+        await facade.MoveTaskAsync(
+            new MoveTaskCommand(
+                first.Id,
+                new TaskLanePosition(weekStart, dayDate, 0),
+                new TaskLanePosition(weekStart, dayDate, 2)),
+            dbContext,
+            CancellationToken.None);
+
+        var orderedIds = await dbContext.Tasks
+            .OrderBy(task => task.OrderIndex)
+            .Select(task => task.Id)
+            .ToArrayAsync();
+        Assert.Equal(new[] { second.Id, third.Id, first.Id }, orderedIds);
+        Assert.Equal(new[] { 0, 1, 2 }, await dbContext.Tasks.OrderBy(task => task.OrderIndex)
+            .Select(task => task.OrderIndex)
+            .ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task MoveTaskAsync_RejectsDestinationIndexOutsideLaneWithoutCreatingDestinationWeek()
+    {
+        var weekStart = new DateOnly(2026, 8, 17);
+        await using var dbContext = CreateDbContext();
+        var workspace = TaskManager.Domain.Board.WeekWorkspace.Create(weekStart);
+        var task = TaskManager.Domain.Board.TaskItem.Create(workspace.Id, weekStart, "Keep me");
+        task.SetOrderIndex(0);
+        dbContext.WeekWorkspaces.Add(workspace);
+        dbContext.Tasks.Add(task);
+        await dbContext.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => facade.MoveTaskAsync(
+            new MoveTaskCommand(
+                task.Id,
+                new TaskLanePosition(weekStart, null, 0),
+                new TaskLanePosition(weekStart.AddDays(7), null, 1)),
+            dbContext,
+            CancellationToken.None));
+
+        Assert.Equal(1, await dbContext.WeekWorkspaces.CountAsync());
+        Assert.Equal(workspace.Id, (await dbContext.Tasks.SingleAsync()).WeekWorkspaceId);
+        Assert.Equal(0, (await dbContext.Tasks.SingleAsync()).OrderIndex);
+    }
+
+    [Fact]
+    public void TaskLanePosition_NormalizesWeekAndRejectsInvalidDayOrIndex()
+    {
+        var position = new TaskLanePosition(
+            new DateOnly(2026, 8, 19),
+            new DateOnly(2026, 8, 23),
+            2);
+
+        Assert.Equal(new DateOnly(2026, 8, 17), position.WeekStartDate);
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new TaskLanePosition(new DateOnly(2026, 8, 17), new DateOnly(2026, 8, 24), 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new TaskLanePosition(new DateOnly(2026, 8, 17), null, -1));
     }
 
     private static DefaultHttpContext CreateContext()

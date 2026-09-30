@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using TaskManager.Api.Facades;
 using TaskManager.Application.Auth;
+using TaskManager.Application.Board;
 using TaskManager.Domain.Board;
 using TaskManager.Infrastructure.Persistence;
 using Xunit;
@@ -309,6 +311,93 @@ public sealed class TaskAuthorizationTests : IClassFixture<WebApplicationFactory
                 cleanupContext.WeekWorkspaces.Remove(seededWorkspace);
             }
 
+            await cleanupContext.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
+    public async Task MoveTaskAsync_PersistsCrossWeekLaneReindexingInRelationalTransaction()
+    {
+        DateOnly sourceWeek;
+        DateOnly destinationWeek;
+        Guid sourceWorkspaceId;
+        Guid destinationWorkspaceId;
+        Guid movedTaskId;
+        Guid sourceRemainingTaskId;
+        Guid destinationTaskId;
+
+        await using (var seedScope = factory.Services.CreateAsyncScope())
+        {
+            var dbContext = seedScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            do
+            {
+                sourceWeek = GetRandomWeekStartDate();
+                destinationWeek = sourceWeek.AddDays(7);
+            }
+            while (await dbContext.WeekWorkspaces.AnyAsync(workspace =>
+                workspace.WeekStartDate == sourceWeek || workspace.WeekStartDate == destinationWeek));
+
+            var sourceWorkspace = WeekWorkspace.Create(sourceWeek);
+            var destinationWorkspace = WeekWorkspace.Create(destinationWeek);
+            var sourceRemainingTask = TaskItem.Create(sourceWorkspace.Id, sourceWeek, "Source remains", sourceWeek.AddDays(1));
+            var movedTask = TaskItem.Create(sourceWorkspace.Id, sourceWeek, "Move across weeks", sourceWeek.AddDays(1));
+            var destinationTask = TaskItem.Create(destinationWorkspace.Id, destinationWeek, "Destination remains", destinationWeek.AddDays(2));
+            sourceRemainingTask.SetOrderIndex(0);
+            movedTask.SetOrderIndex(1);
+            destinationTask.SetOrderIndex(0);
+            sourceWorkspaceId = sourceWorkspace.Id;
+            destinationWorkspaceId = destinationWorkspace.Id;
+            movedTaskId = movedTask.Id;
+            sourceRemainingTaskId = sourceRemainingTask.Id;
+            destinationTaskId = destinationTask.Id;
+            dbContext.WeekWorkspaces.AddRange(sourceWorkspace, destinationWorkspace);
+            dbContext.Tasks.AddRange(sourceRemainingTask, movedTask, destinationTask);
+            await dbContext.SaveChangesAsync();
+        }
+
+        try
+        {
+            await using (var moveScope = factory.Services.CreateAsyncScope())
+            {
+                var dbContext = moveScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+                await new TaskManagerFacade().MoveTaskAsync(
+                    new MoveTaskCommand(
+                        movedTaskId,
+                        new TaskLanePosition(sourceWeek, sourceWeek.AddDays(1), 1),
+                        new TaskLanePosition(destinationWeek, destinationWeek.AddDays(2), 0)),
+                    dbContext,
+                    CancellationToken.None);
+            }
+
+            await using var verificationScope = factory.Services.CreateAsyncScope();
+            var verificationContext = verificationScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            var sourceTasks = await verificationContext.Tasks
+                .Where(task => task.WeekWorkspaceId == sourceWorkspaceId)
+                .OrderBy(task => task.OrderIndex)
+                .ToListAsync();
+            var destinationTasks = await verificationContext.Tasks
+                .Where(task => task.WeekWorkspaceId == destinationWorkspaceId)
+                .OrderBy(task => task.OrderIndex)
+                .ToListAsync();
+
+            Assert.Equal(new[] { sourceRemainingTaskId }, sourceTasks.Select(task => task.Id));
+            Assert.Equal(new[] { movedTaskId, destinationTaskId }, destinationTasks.Select(task => task.Id));
+            Assert.Equal(new[] { 0 }, sourceTasks.Select(task => task.OrderIndex));
+            Assert.Equal(new[] { 0, 1 }, destinationTasks.Select(task => task.OrderIndex));
+            Assert.Equal(destinationWorkspaceId, destinationTasks[0].WeekWorkspaceId);
+            Assert.Equal(destinationWeek.AddDays(2), destinationTasks[0].DayDate);
+        }
+        finally
+        {
+            await using var cleanupScope = factory.Services.CreateAsyncScope();
+            var cleanupContext = cleanupScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            cleanupContext.Tasks.RemoveRange(await cleanupContext.Tasks
+                .Where(task => task.WeekWorkspaceId == sourceWorkspaceId
+                    || task.WeekWorkspaceId == destinationWorkspaceId)
+                .ToListAsync());
+            cleanupContext.WeekWorkspaces.RemoveRange(await cleanupContext.WeekWorkspaces
+                .Where(workspace => workspace.Id == sourceWorkspaceId || workspace.Id == destinationWorkspaceId)
+                .ToListAsync());
             await cleanupContext.SaveChangesAsync();
         }
     }

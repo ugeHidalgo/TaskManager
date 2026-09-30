@@ -1,6 +1,10 @@
+---
+baseline_commit: 5f84e172314597f2e4ca9bbca935e4889fa9465c
+---
+
 # Story 3.2: Move Tasks Across Day Columns and Shared Week Section
 
-Status: ready-for-dev
+Status: in-progress
 
 Epic: 3 - Task Prioritization by Drag and Reorder  
 Story ID: 3.2  
@@ -36,11 +40,11 @@ so that I can reassign work without recreating it.
 
 ### Task 1 - Atomic move domain operation
 
-- [ ] Define a move command covering source week/lane/index and destination week/lane/index.
-- [ ] Normalize both week inputs to Monday and validate day lanes against the destination week.
-- [ ] Update task week ownership and nullable day placement while preserving task ID and task fields.
-- [ ] Remove from the source sequence, insert into the destination sequence, and reindex all affected lanes in one database transaction.
-- [ ] Preserve the existing shared-week execution-time normalization rule when destination placement has no day date.
+- [x] Define a move command covering source week/lane/index and destination week/lane/index.
+- [x] Normalize both week inputs to Monday and validate day lanes against the destination week.
+- [x] Update task week ownership and nullable day placement while preserving task ID and task fields.
+- [x] Remove from the source sequence, insert into the destination sequence, and reindex all affected lanes in one database transaction.
+- [x] Preserve the existing shared-week execution-time normalization rule when destination placement has no day date.
 
 ### Task 2 - Move API contract
 
@@ -88,3 +92,33 @@ so that I can reassign work without recreating it.
 - `_bmad-output/implementation-artifacts/epic-2/2-1-create-and-edit-tasks-in-day-and-shared-week-context.md`
 - `_bmad-output/implementation-artifacts/epic-2/2-3-add-task-execution-time.md`
 - `_bmad-output/implementation-artifacts/epic-2/2-6-protect-unsaved-changes-during-navigation.md`
+
+## Dev Agent Record
+
+### Debug Log References
+
+- `dotnet test src/backend/tests/Taskmanager.Tests.csproj --no-restore --filter 'FullyQualifiedName~MoveTaskAsync|FullyQualifiedName~TaskLanePosition' --logger 'console;verbosity=minimal'` — passed, 8 tests.
+- `dotnet test TaskManager.sln --no-restore --verbosity quiet` — passed, 66 tests.
+- `git diff --check` — passed.
+
+### Completion Notes List
+
+- Added `MoveTaskCommand` and `TaskLanePosition` in the application layer; lane positions normalize weeks to Monday and validate dates and non-negative indices.
+- Added `TaskItem.MoveTo` to update week ownership and nullable day placement without replacing task identity or changing task content/status; moving to shared-week clears execution time.
+- Added a transaction-backed move operation that verifies the source position, inserts at the requested destination position, and collision-safely reindexes all affected lanes.
+- Added unit and PostgreSQL-backed regressions for cross-week moves, same-week day/shared-week moves, same-lane reordering, metadata preservation, invalid destination positions, and lane index normalization.
+- Task 2 and later tasks remain untouched; the move operation is not yet exposed as an HTTP endpoint.
+
+### File List
+
+- `src/backend/src/TaskManager.Application/Board/MoveTaskCommand.cs`
+- `src/backend/src/TaskManager.Api/Facades/TaskManagerFacade.cs`
+- `src/backend/src/TaskManager.Domain/Board/TaskItem.cs`
+- `src/backend/tests/TaskApiTests.cs`
+- `src/backend/tests/TaskAuthorizationTests.cs`
+- `_bmad-output/implementation-artifacts/epic-3/3-2-move-tasks-across-day-columns-and-shared-week-section.md`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`
+
+### Change Log
+
+- 2026-09-30: Completed US3.2 Task 1 with normalized move command, transactional lane reindexing, domain placement updates, shared-week execution-time normalization, and focused backend coverage.

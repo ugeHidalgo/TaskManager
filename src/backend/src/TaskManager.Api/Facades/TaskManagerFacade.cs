@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using TaskManager.Api.Contracts;
 using TaskManager.Application.Auth;
+using TaskManager.Application.Board;
 using TaskManager.Domain.Board;
 using TaskManager.Infrastructure.Persistence;
 
@@ -438,6 +439,109 @@ public sealed class TaskManagerFacade
         }
     }
 
+    public async Task MoveTaskAsync(
+        MoveTaskCommand command,
+        TaskManagerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        await using var transaction = dbContext.Database.IsRelational()
+            ? await dbContext.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+
+        var sourceWorkspace = await dbContext.WeekWorkspaces
+            .SingleOrDefaultAsync(
+                workspace => workspace.WeekStartDate == command.Source.WeekStartDate,
+                cancellationToken)
+            ?? throw new InvalidOperationException("The task source week was not found.");
+        var sourceLane = await GetOrderedLaneAsync(
+            dbContext,
+            sourceWorkspace.Id,
+            command.Source.DayDate,
+            cancellationToken);
+        if (command.Source.Index >= sourceLane.Count
+            || sourceLane[command.Source.Index].Id != command.TaskId)
+        {
+            throw new InvalidOperationException("The task is not at the requested source position.");
+        }
+
+        var task = sourceLane[command.Source.Index];
+        var sameWeek = command.Destination.WeekStartDate == sourceWorkspace.WeekStartDate;
+        var destinationWorkspace = sameWeek
+            ? sourceWorkspace
+            : await dbContext.WeekWorkspaces.SingleOrDefaultAsync(
+                workspace => workspace.WeekStartDate == command.Destination.WeekStartDate,
+                cancellationToken);
+        var sameLane = sameWeek
+            && command.Source.DayDate == command.Destination.DayDate;
+        var destinationLane = sameLane
+            ? sourceLane
+            : destinationWorkspace is null
+                ? []
+                : await GetOrderedLaneAsync(
+                    dbContext,
+                    destinationWorkspace.Id,
+                    command.Destination.DayDate,
+                    cancellationToken);
+        var destinationWithoutTask = sameLane
+            ? sourceLane.Where(candidate => candidate.Id != task.Id).ToList()
+            : destinationLane;
+
+        if (command.Destination.Index > destinationWithoutTask.Count)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(command),
+                "Destination index must identify a position in the destination lane.");
+        }
+
+        destinationWorkspace ??= await GetOrCreateWorkspaceAsync(
+            dbContext,
+            command.Destination.WeekStartDate,
+            cancellationToken);
+
+        var destinationOrderedTasks = destinationWithoutTask.ToList();
+        destinationOrderedTasks.Insert(command.Destination.Index, task);
+        var affectedTasks = sourceLane
+            .Concat(sameLane ? [] : destinationLane)
+            .DistinctBy(candidate => candidate.Id)
+            .ToArray();
+        var temporaryStart = (long)affectedTasks.Max(candidate => candidate.OrderIndex)
+            + affectedTasks.Length + 1;
+        if (temporaryStart + affectedTasks.Length - 1 > int.MaxValue)
+        {
+            throw new InvalidOperationException("The affected task lanes cannot be safely reindexed.");
+        }
+
+        for (var index = 0; index < affectedTasks.Length; index++)
+        {
+            affectedTasks[index].SetOrderIndex((int)(temporaryStart + index));
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        task.MoveTo(
+            destinationWorkspace.Id,
+            command.Destination.WeekStartDate,
+            command.Destination.DayDate);
+        if (sameLane)
+        {
+            SetLaneOrder(destinationOrderedTasks);
+        }
+        else
+        {
+            var sourceRemainingTasks = sourceLane.Where(candidate => candidate.Id != task.Id).ToList();
+            SetLaneOrder(sourceRemainingTasks);
+            SetLaneOrder(destinationOrderedTasks);
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
+    }
+
     public async Task<IResult> DeleteTaskAsync(
         Guid taskId,
         HttpContext httpContext,
@@ -522,6 +626,27 @@ public sealed class TaskManagerFacade
             .Select(task => (int?)task.OrderIndex)
             .MaxAsync(cancellationToken);
         return (maximumOrderIndex ?? -1) + 1;
+    }
+
+    private static async Task<List<TaskItem>> GetOrderedLaneAsync(
+        TaskManagerDbContext dbContext,
+        Guid workspaceId,
+        DateOnly? dayDate,
+        CancellationToken cancellationToken)
+    {
+        return await dbContext.Tasks
+            .Where(task => task.WeekWorkspaceId == workspaceId && task.DayDate == dayDate)
+            .OrderBy(task => task.OrderIndex)
+            .ThenBy(task => task.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    private static void SetLaneOrder(IReadOnlyList<TaskItem> tasks)
+    {
+        for (var index = 0; index < tasks.Count; index++)
+        {
+            tasks[index].SetOrderIndex(index);
+        }
     }
 
     private static async Task NormalizeLaneAsync(

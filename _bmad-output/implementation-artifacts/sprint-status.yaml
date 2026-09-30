@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-07-12T18:09:49Z
-last_updated: 2026-09-27T00:00:00Z
+last_updated: 2026-09-30T00:00:00Z
 project: TaskManager
 project_key: NOKEY
 tracking_system: file-system
@@ -64,7 +64,7 @@ development_status:
 
   epic-3: in-progress
   3-1-reorder-tasks-within-the-same-section: done
-  3-2-move-tasks-across-day-columns-and-shared-week-section: ready-for-dev
+  3-2-move-tasks-across-day-columns-and-shared-week-section: in-progress
   3-3-maintain-stable-order-semantics-and-visual-feedback: ready-for-dev
   epic-3-retrospective: optional
 
