@@ -291,6 +291,377 @@ describe("BoardPage week navigation", () => {
         }),
       );
     });
+    await waitFor(() => {
+      const movedCard = screen
+        .getByText("Plan Monday work")
+        .closest(".task-item");
+      expect(screen.getAllByText("Plan Monday work")).toHaveLength(1);
+      expect(
+        movedCard?.closest(".day-column")?.getAttribute("aria-label"),
+      ).toContain("Tuesday");
+    });
+  });
+
+  it("does not send a move request when a task is dropped back into its own lane", async () => {
+    const initialWeekStart = getWeekRange(new Date()).weekStart;
+    const sourceDay = formatDateOnly(initialWeekStart);
+    const task = makeTask("task-1", "Stay on Monday", sourceDay);
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
+        if (String(input).includes("/tasks/task-1/move")) {
+          return new Response(JSON.stringify({ data: {} }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return buildBoardResponseFromUrl(String(input), [task]);
+      });
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    const taskCard = (await screen.findByText("Stay on Monday")).closest(
+      ".task-item",
+    ) as HTMLElement;
+    fireEvent.dragStart(taskCard);
+    fireEvent.drop(taskCard);
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([input]) => String(input).includes("/move")),
+      ).toBe(false);
+    });
+    expect(screen.getAllByText("Stay on Monday")).toHaveLength(1);
+  });
+
+  it.each(["day-to-shared", "shared-to-day"] as const)(
+    "moves a task through a valid %s drop target",
+    async (moveDirection) => {
+      const initialWeekStart = getWeekRange(new Date()).weekStart;
+      const sourceDay = formatDateOnly(initialWeekStart);
+      const destinationDay = formatDateOnly(
+        shiftDateByDays(initialWeekStart, 1),
+      );
+      const isDayToShared = moveDirection === "day-to-shared";
+      const task = makeTask(
+        "task-1",
+        isDayToShared ? "Day to shared" : "Shared to day",
+        isDayToShared ? sourceDay : null,
+      );
+      let moveRequest: Record<string, unknown> | null = null;
+      const fetchMock = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(async (input, init) => {
+          if (String(input).includes("/tasks/task-1/move")) {
+            moveRequest = JSON.parse(String(init?.body)) as Record<
+              string,
+              unknown
+            >;
+            const movedTask = {
+              ...task,
+              dayDate: isDayToShared ? null : destinationDay,
+              orderIndex: 0,
+            };
+            return new Response(
+              JSON.stringify({
+                data: {
+                  taskId: task.id,
+                  source: {
+                    weekStartDate: sourceDay,
+                    snapshotVersion: "v1",
+                    tasks: [movedTask],
+                  },
+                  destination: {
+                    weekStartDate: sourceDay,
+                    snapshotVersion: "v1",
+                    tasks: [movedTask],
+                  },
+                },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            );
+          }
+          return buildBoardResponseFromUrl(String(input), [task]);
+        });
+
+      render(
+        <MemoryRouter>
+          <BoardPage />
+        </MemoryRouter>,
+      );
+
+      const taskCard = (await screen.findByText(task.title)).closest(
+        ".task-item",
+      ) as HTMLElement;
+      const destination = isDayToShared
+        ? (document.querySelector(".week-section-content") as HTMLElement)
+        : (screen
+            .getByText(/^No tasks for Tuesday$/)
+            .closest(".day-column-content") as HTMLElement);
+      fireEvent.dragStart(taskCard);
+      fireEvent.dragOver(destination);
+      fireEvent.drop(destination);
+
+      await waitFor(() => {
+        expect(moveRequest).toMatchObject({
+          sourceDayDate: isDayToShared ? sourceDay : null,
+          destinationDayDate: isDayToShared ? null : destinationDay,
+          destinationIndex: 0,
+        });
+        expect(screen.getAllByText(task.title)).toHaveLength(1);
+      });
+      const movedCard = screen.getByText(task.title).closest(".task-item");
+      expect(
+        movedCard
+          ?.closest(isDayToShared ? ".week-section-content" : ".day-column")
+          ?.getAttribute("class"),
+      ).toContain(isDayToShared ? "week-section-content" : "day-column");
+      expect(
+        fetchMock.mock.calls.some(([input]) =>
+          String(input).includes("/tasks/task-1/move"),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it("moves a task to another week with the context-menu Move here flow", async () => {
+    const user = userEvent.setup();
+    const sourceWeek = getWeekRange(new Date()).weekStart;
+    const destinationWeek = shiftDateByDays(sourceWeek, 7);
+    const sourceWeekParam = formatDateOnly(sourceWeek);
+    const destinationWeekParam = formatDateOnly(destinationWeek);
+    const sourceDay = sourceWeekParam;
+    const destinationDay = formatDateOnly(shiftDateByDays(destinationWeek, 1));
+    const sourceTask = withOrder(
+      makeTask("task-1", "Move across weeks", sourceDay),
+      0,
+    );
+    const destinationTask = withOrder(
+      makeTask("task-2", "Already planned", destinationDay),
+      0,
+    );
+    let moveRequest: Record<string, unknown> | null = null;
+    let hasMoved = false;
+
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input, init) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith("/tasks/task-1/move")) {
+          hasMoved = true;
+          moveRequest = JSON.parse(String(init?.body)) as Record<
+            string,
+            unknown
+          >;
+          return new Response(
+            JSON.stringify({
+              data: {
+                taskId: "task-1",
+                source: {
+                  weekStartDate: sourceWeekParam,
+                  snapshotVersion: "source-after-move",
+                  tasks: [],
+                },
+                destination: {
+                  weekStartDate: destinationWeekParam,
+                  snapshotVersion: "destination-after-move",
+                  tasks: [
+                    destinationTask,
+                    {
+                      ...sourceTask,
+                      weekWorkspaceId: "destination-workspace",
+                      dayDate: destinationDay,
+                      orderIndex: 1,
+                    },
+                  ],
+                },
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+
+        if (url.pathname.endsWith("/tasks")) {
+          const requestedWeek = url.searchParams.get("weekStartDate");
+          const movedTask = {
+            ...sourceTask,
+            weekWorkspaceId: "destination-workspace",
+            dayDate: destinationDay,
+            orderIndex: 1,
+          };
+          return buildBoardResponseFromUrl(
+            String(input),
+            requestedWeek === sourceWeekParam
+              ? hasMoved
+                ? []
+                : [sourceTask]
+              : hasMoved
+                ? [destinationTask, movedTask]
+                : [destinationTask],
+          );
+        }
+
+        return buildBoardResponseFromUrl(String(input));
+      });
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "More actions for Move across weeks",
+      }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Move" }));
+    expect(
+      screen.getByRole("button", { name: "Cancel move" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Move here to Saturday" }),
+    ).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Go to next week" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Move here to Tuesday" }),
+    );
+
+    await waitFor(() => {
+      expect(moveRequest).toMatchObject({
+        sourceWeekStartDate: sourceWeekParam,
+        sourceDayDate: sourceDay,
+        sourceIndex: 0,
+        destinationWeekStartDate: destinationWeekParam,
+        destinationDayDate: destinationDay,
+        destinationIndex: 1,
+      });
+    });
+    expect(await screen.findAllByText("Move across weeks")).toHaveLength(1);
+    expect(screen.getAllByText("Already planned")).toHaveLength(1);
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).includes("/tasks?weekStartDate="),
+      ),
+    ).toBe(true);
+
+    await user.click(
+      screen.getByRole("button", { name: "Go to previous week" }),
+    );
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([input]) =>
+          String(input).includes(`/tasks?weekStartDate=${sourceWeekParam}`),
+        ),
+      ).toBe(true);
+      expect(screen.queryByText("Move across weeks")).toBeNull();
+    });
+    await user.click(screen.getByRole("button", { name: "Go to next week" }));
+    expect(await screen.findAllByText("Move across weeks")).toHaveLength(1);
+  });
+
+  it("clears pending move on cancel and outside click without mutating", async () => {
+    const user = userEvent.setup();
+    const initialWeekStart = getWeekRange(new Date()).weekStart;
+    const task = makeTask(
+      "task-1",
+      "Cancel this move",
+      formatDateOnly(initialWeekStart),
+    );
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) =>
+        buildBoardResponseFromUrl(String(input), [task]),
+      );
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "More actions for Cancel this move",
+      }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Move" }));
+    await user.click(screen.getByRole("button", { name: "Cancel move" }));
+    expect(
+      screen.queryByRole("button", { name: "Move here to Tuesday" }),
+    ).toBeNull();
+
+    await user.click(
+      screen.getByRole("button", { name: "More actions for Cancel this move" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Move" }));
+    await user.click(screen.getByText("Signed in as admin"));
+
+    expect(screen.queryByRole("button", { name: "Cancel move" })).toBeNull();
+    expect(
+      fetchMock.mock.calls.some(([input]) => String(input).includes("/move")),
+    ).toBe(false);
+  });
+
+  it("keeps the source task exactly once and refetches after a failed move", async () => {
+    const initialWeekStart = getWeekRange(new Date()).weekStart;
+    const sourceDay = formatDateOnly(initialWeekStart);
+    const task = makeTask("task-1", "Move conflict task", sourceDay);
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) => {
+        if (String(input).includes("/tasks/task-1/move")) {
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "task.move.conflict",
+                message: "Reload and try again.",
+              },
+            }),
+            { status: 409, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return buildBoardResponseFromUrl(String(input), [task]);
+      });
+
+    render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+
+    const sourceCard = (await screen.findByText("Move conflict task")).closest(
+      ".task-item",
+    ) as HTMLElement;
+    const destinationCard = screen
+      .getByText(/^No tasks for Tuesday$/)
+      .closest(".day-column-content") as HTMLElement;
+    fireEvent.dragStart(sourceCard);
+    fireEvent.dragOver(destinationCard);
+    fireEvent.drop(destinationCard);
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Reload and try again.",
+      );
+      expect(screen.getAllByText("Move conflict task")).toHaveLength(1);
+      expect(
+        fetchMock.mock.calls.filter(([input]) =>
+          String(input).includes("/tasks?weekStartDate="),
+        ).length,
+      ).toBeGreaterThanOrEqual(2);
+    });
+    expect(
+      screen
+        .getByText("Move conflict task")
+        .closest(".day-column")
+        ?.getAttribute("aria-label"),
+    ).toContain("Monday");
   });
 
   it("renders shared and daily tasks in their matching sections", async () => {
@@ -711,6 +1082,7 @@ describe("BoardPage week navigation", () => {
       "task-completion-checkbox",
       "edit-task-button",
       "delete-task-button",
+      "task-menu-button",
       "task-progress-label",
     ]);
     expect(
@@ -718,7 +1090,7 @@ describe("BoardPage week navigation", () => {
     ).toBeInTheDocument();
     expect(
       within(inProgressRows[1] as HTMLElement).getAllByRole("button"),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
 
     const notStartedCard = screen
       .getByText("Not started title")
@@ -734,6 +1106,7 @@ describe("BoardPage week navigation", () => {
       "task-completion-checkbox",
       "edit-task-button",
       "delete-task-button",
+      "task-menu-button",
       "task-not-started-label",
     ]);
     expect(notStartedCard.querySelector(".task-progress-label")).toBeNull();
@@ -769,7 +1142,7 @@ describe("BoardPage week navigation", () => {
         name: "Task 3: Delete task: Completed title",
       }),
     ).toBeVisible();
-    expect(within(completedCard).getAllByRole("button")).toHaveLength(3);
+    expect(within(completedCard).getAllByRole("button")).toHaveLength(4);
   });
 
   it("cancels or confirms permanent task deletion", async () => {

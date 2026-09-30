@@ -11,6 +11,7 @@ export interface WeekSectionProps {
   onAddTask?: () => void;
   onLaneDragOver?: (event: React.DragEvent<HTMLElement>) => void;
   onLaneDrop?: (event: React.DragEvent<HTMLElement>) => void;
+  onMoveHere?: () => void;
 }
 
 /**
@@ -23,6 +24,7 @@ export function WeekSection({
   onAddTask,
   onLaneDragOver,
   onLaneDrop,
+  onMoveHere,
 }: WeekSectionProps) {
   const headingId = "week-section-title";
 
@@ -47,6 +49,17 @@ export function WeekSection({
         >
           +
         </button>
+        {onMoveHere ? (
+          <button
+            type="button"
+            className="move-here-button"
+            data-move-here="true"
+            onClick={onMoveHere}
+            aria-label="Move here to shared week"
+          >
+            Move here
+          </button>
+        ) : null}
       </header>
 
       <article

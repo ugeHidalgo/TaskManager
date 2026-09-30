@@ -4,7 +4,7 @@ baseline_commit: 5f84e172314597f2e4ca9bbca935e4889fa9465c
 
 # Story 3.2: Move Tasks Across Day Columns and Shared Week Section
 
-Status: in-progress
+Status: done
 
 Epic: 3 - Task Prioritization by Drag and Reorder  
 Story ID: 3.2  
@@ -64,10 +64,10 @@ so that I can reassign work without recreating it.
 
 ### Task 4 - Tests and validation
 
-- [ ] Add backend integration coverage for day-to-day, day-to-shared, shared-to-day, same-week reorder, and cross-week moves.
-- [ ] Verify task ID preservation, source/destination order, transaction rollback, conflict response, and authorization boundaries.
-- [ ] Add frontend coverage for valid/invalid drop targets, duplicate prevention, cross-week refetch, context-menu pending state, cancel, and `Move here`.
-- [ ] Run focused backend/frontend tests, lint, build, and migration validation.
+- [x] Add backend integration coverage for day-to-day, day-to-shared, shared-to-day, same-week reorder, and cross-week moves.
+- [x] Verify task ID preservation, source/destination order, transaction rollback, conflict response, and authorization boundaries.
+- [x] Add frontend coverage for valid/invalid drop targets, duplicate prevention, cross-week refetch, context-menu pending state, cancel, and `Move here`.
+- [x] Run focused backend/frontend tests, lint, build, and migration validation.
 
 ## Developer Context
 
@@ -98,6 +98,12 @@ so that I can reassign work without recreating it.
 
 - `dotnet test src/backend/tests/Taskmanager.Tests.csproj --no-restore --filter 'FullyQualifiedName~MoveTaskAsync|FullyQualifiedName~TaskLanePosition' --logger 'console;verbosity=minimal'` — passed, 8 tests.
 - `dotnet test TaskManager.sln --no-restore --verbosity quiet` — passed, 66 tests.
+- `dotnet test src/backend/tests/Taskmanager.Tests.csproj --no-restore --filter 'FullyQualifiedName~MoveTask' --logger 'console;verbosity=minimal'` — passed, 11 move tests, including API integration, conflict, rollback, and authorization coverage.
+- `dotnet test TaskManager.sln --no-restore --logger 'console;verbosity=minimal'` — passed, 70 tests.
+- `cd src/frontend && npm run test:run` — passed, 73 tests.
+- `cd src/frontend && npm run lint` — passed.
+- `cd src/frontend && npm run build` — passed.
+- `dotnet tool run dotnet-ef migrations has-pending-model-changes --project src/backend/src/TaskManager.Infrastructure/TaskManager.Infrastructure.csproj --startup-project src/backend/src/TaskManager.Api/TaskManager.Api.csproj` — passed; no model changes pending.
 - `git diff --check` — passed.
 
 ### Completion Notes List
@@ -109,6 +115,9 @@ so that I can reassign work without recreating it.
 - Added `POST /api/v1/tasks/{taskId}/move` with camelCase request DTOs, standard success/error envelopes, and source/destination snapshots.
 - Added deterministic snapshot versions and in-transaction optimistic validation; conflicts return `task.move.conflict`.
 - Added stable move error mapping for validation, invalid positions, missing tasks, conflicts, and unexpected failures.
+- Added authenticated PostgreSQL-backed API coverage for day-to-day, day-to-shared, shared-to-day, same-lane reorder, cross-week ordering and reload, stale snapshot conflicts, transaction rollback after an injected mid-operation failure, and unauthenticated mutation protection.
+- Added frontend move API and board tests for same-lane invalid drops, day/shared lane moves, exactly-once rendering, authoritative recovery after failures, cross-week refetch, pending context-menu move state, cancellation, outside-click cleanup, and `Move here` destination confirmation.
+- Implemented the pending context-menu move interaction: select `Move`, navigate weeks, confirm on a visible day/shared-week lane, or cancel/clear the pending selection without mutation.
 
 ### File List
 
@@ -119,6 +128,13 @@ so that I can reassign work without recreating it.
 - `src/backend/src/TaskManager.Domain/Board/TaskItem.cs`
 - `src/backend/tests/TaskApiTests.cs`
 - `src/backend/tests/TaskAuthorizationTests.cs`
+- `src/frontend/src/api/board.test.ts`
+- `src/frontend/src/features/board/components/DayColumn.tsx`
+- `src/frontend/src/features/board/components/WeekLayout.tsx`
+- `src/frontend/src/features/board/components/WeekSection.tsx`
+- `src/frontend/src/features/board/styles/board-layout.css`
+- `src/frontend/src/pages/BoardPage.test.tsx`
+- `src/frontend/src/pages/BoardPage.tsx`
 - `_bmad-output/implementation-artifacts/epic-3/3-2-move-tasks-across-day-columns-and-shared-week-section.md`
 - `_bmad-output/implementation-artifacts/sprint-status.yaml`
 
@@ -126,3 +142,5 @@ so that I can reassign work without recreating it.
 
 - 2026-09-30: Completed US3.2 Task 1 with normalized move command, transactional lane reindexing, domain placement updates, shared-week execution-time normalization, and focused backend coverage.
 - 2026-09-30: Completed US3.2 Task 2 with versioned move API contract, authoritative source/destination snapshots, stable error mapping, and full backend validation.
+- 2026-09-30: Completed US3.2 Task 4 with backend/frontend move regression coverage, pending cross-week context-menu flow, rollback/conflict/auth checks, and passing test, lint, build, and migration gates; story is ready for review.
+- 2026-09-30: US3.2 approved and marked done.

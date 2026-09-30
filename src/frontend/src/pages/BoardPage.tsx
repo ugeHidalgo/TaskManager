@@ -28,6 +28,12 @@ import { getToken } from "../lib/session";
 
 const BOARD_VIEW_MODE_KEY = "taskmanager.boardViewMode";
 type StatusMessagePhase = "blinking" | "static" | null;
+type PendingMove = {
+  taskId: string;
+  title: string;
+  sourceWeekStartDate: string;
+  sourceDayDate: string | null;
+};
 
 function getInitialBoardViewMode(): BoardViewMode {
   const storedMode = window.localStorage.getItem(BOARD_VIEW_MODE_KEY);
@@ -60,6 +66,9 @@ export function BoardPage() {
     laneKey: string;
     taskId: string;
   } | null>(null);
+  const [activeTaskMenuId, setActiveTaskMenuId] = useState<string | null>(null);
+  const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
+  const [isMoving, setIsMoving] = useState(false);
   const [loadedWeekStartDate, setLoadedWeekStartDate] = useState<string | null>(
     null,
   );
@@ -97,6 +106,47 @@ export function BoardPage() {
 
     return undefined;
   }, [statusMessagePhase]);
+
+  useEffect(() => {
+    if (!activeTaskMenuId && !pendingMove) {
+      return undefined;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      if (
+        activeTaskMenuId &&
+        !target.closest(".task-context-menu, [data-task-menu-trigger]")
+      ) {
+        setActiveTaskMenuId(null);
+      }
+
+      if (
+        pendingMove &&
+        !target.closest(".week-nav, .pending-move-flow, [data-move-here]")
+      ) {
+        setPendingMove(null);
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setActiveTaskMenuId(null);
+        setPendingMove(null);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [activeTaskMenuId, pendingMove]);
 
   useEffect(() => {
     if (!token) {
@@ -142,6 +192,8 @@ export function BoardPage() {
   const disableTaskActions =
     isEditorOpen ||
     isSaving ||
+    isMoving ||
+    pendingMove !== null ||
     pendingStatusTaskIds.size > 0 ||
     pendingDeleteTaskIds.size > 0 ||
     pendingReorderLane !== null;
@@ -213,50 +265,57 @@ export function BoardPage() {
     sourceDayDate: string | null,
     destinationDayDate: string | null,
     destinationIndex: number,
+    sourceWeekStartDateValue = weekStartDateParam,
+    destinationWeekStartDateValue = weekStartDateParam,
   ) {
     if (!token) {
       return;
     }
 
-    const sourceWeekStartDate = weekStartDateParam;
+    const sourceWeekStartDate = sourceWeekStartDateValue;
     const sourceWeekDate = new Date(`${sourceWeekStartDate}T00:00:00`);
-    const sourceTasks = await getTasksForWeek(token, sourceWeekDate);
-    const sourceBoard = await getBoardForWeek(token, sourceWeekDate);
-    const sourceLaneTasks = sortTasks(
-      sourceTasks.filter((task) => task.dayDate === sourceDayDate),
-    );
-    const sourceIndex = sourceLaneTasks.findIndex((task) => task.id === taskId);
-    if (sourceIndex < 0) {
-      return;
-    }
-
-    const destinationWeekStartDate = weekStartDateParam;
-    const destinationTasks =
-      destinationWeekStartDate === sourceWeekStartDate
-        ? sourceTasks
-        : await getTasksForWeek(
-            token,
-            new Date(`${destinationWeekStartDate}T00:00:00`),
-          );
-    const destinationLaneTasks = sortTasks(
-      destinationTasks.filter((task) => task.dayDate === destinationDayDate),
-    );
-    const normalizedDestinationIndex = Math.max(
-      0,
-      Math.min(destinationIndex, destinationLaneTasks.length),
-    );
-    const sourceSnapshotVersion =
-      sourceBoard.snapshotVersion ??
-      (await getWeekSnapshotVersion(sourceWeekStartDate, sourceTasks));
-    const destinationSnapshotVersion =
-      destinationWeekStartDate === sourceWeekStartDate
-        ? sourceSnapshotVersion
-        : await getWeekSnapshotVersion(
-            destinationWeekStartDate,
-            destinationTasks,
-          );
+    const destinationWeekStartDate = destinationWeekStartDateValue;
+    setIsMoving(true);
 
     try {
+      const sourceTasks = await getTasksForWeek(token, sourceWeekDate);
+      const sourceBoard = await getBoardForWeek(token, sourceWeekDate);
+      const sourceLaneTasks = sortTasks(
+        sourceTasks.filter((task) => task.dayDate === sourceDayDate),
+      );
+      const sourceIndex = sourceLaneTasks.findIndex(
+        (task) => task.id === taskId,
+      );
+      if (sourceIndex < 0) {
+        setPendingMove(null);
+        return;
+      }
+
+      const destinationTasks =
+        destinationWeekStartDate === sourceWeekStartDate
+          ? sourceTasks
+          : await getTasksForWeek(
+              token,
+              new Date(`${destinationWeekStartDate}T00:00:00`),
+            );
+      const destinationLaneTasks = sortTasks(
+        destinationTasks.filter((task) => task.dayDate === destinationDayDate),
+      );
+      const normalizedDestinationIndex = Math.max(
+        0,
+        Math.min(destinationIndex, destinationLaneTasks.length),
+      );
+      const sourceSnapshotVersion =
+        sourceBoard.snapshotVersion ??
+        (await getWeekSnapshotVersion(sourceWeekStartDate, sourceTasks));
+      const destinationSnapshotVersion =
+        destinationWeekStartDate === sourceWeekStartDate
+          ? sourceSnapshotVersion
+          : await getWeekSnapshotVersion(
+              destinationWeekStartDate,
+              destinationTasks,
+            );
+
       const response = await moveTask(token, taskId, {
         sourceWeekStartDate,
         sourceDayDate,
@@ -280,13 +339,57 @@ export function BoardPage() {
       setSaveMessage("Task moved.");
       setStatusMessagePhase(null);
     } catch (error) {
+      try {
+        const authoritativeTasks = await getTasksForWeek(token, weekStart);
+        setTasks(authoritativeTasks);
+      } catch {
+        // Keep the current board until the next successful week load.
+      }
       setSaveMessage(
         error instanceof Error
           ? error.message
           : "Could not move the task. Please try again.",
       );
       setStatusMessagePhase(null);
+    } finally {
+      setPendingMove(null);
+      setIsMoving(false);
     }
+  }
+
+  function beginPendingMove(task: TaskPayload, sourceDayDate: string | null) {
+    setActiveTaskMenuId(null);
+    setPendingMove({
+      taskId: task.id,
+      title: task.title,
+      sourceWeekStartDate: weekStartDateParam,
+      sourceDayDate,
+    });
+  }
+
+  function movePendingTaskHere(destinationDayDate: string | null) {
+    if (!pendingMove) {
+      return;
+    }
+
+    const destinationLaneTasks = sortTasks(
+      visibleTasks.filter((task) => task.dayDate === destinationDayDate),
+    );
+    const isSameSourceLane =
+      pendingMove.sourceWeekStartDate === weekStartDateParam &&
+      pendingMove.sourceDayDate === destinationDayDate;
+    const destinationIndex = destinationLaneTasks.filter(
+      (task) => !isSameSourceLane || task.id !== pendingMove.taskId,
+    ).length;
+    setPendingMove(null);
+    void handleMoveTask(
+      pendingMove.taskId,
+      pendingMove.sourceDayDate,
+      destinationDayDate,
+      destinationIndex,
+      pendingMove.sourceWeekStartDate,
+      weekStartDateParam,
+    );
   }
 
   function handleViewModeChange(mode: BoardViewMode) {
@@ -591,6 +694,20 @@ export function BoardPage() {
         </p>
       ) : null}
 
+      {pendingMove ? (
+        <div className="pending-move-flow" role="status" aria-live="polite">
+          <span>Moving “{pendingMove.title}”. Choose a destination lane.</span>
+          <button
+            type="button"
+            className="cancel-move-button"
+            aria-label="Cancel move"
+            onClick={() => setPendingMove(null)}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
+
       <WeekLayout
         weekStart={weekStart}
         weekEnd={weekEnd}
@@ -623,6 +740,9 @@ export function BoardPage() {
           );
           setDraggedTask(null);
         }}
+        onWeekLaneMoveHere={
+          pendingMove ? () => movePendingTaskHere(null) : undefined
+        }
         onDayLaneDragOver={(event) => {
           if (!draggedTask) {
             return;
@@ -650,6 +770,9 @@ export function BoardPage() {
           );
           setDraggedTask(null);
         }}
+        onDayLaneMoveHere={
+          pendingMove ? (dayDate) => movePendingTaskHere(dayDate) : undefined
+        }
         weekContent={renderTasks(
           sortTasks(visibleTasks.filter((task) => task.dayDate === null)),
           null,
@@ -666,6 +789,9 @@ export function BoardPage() {
           pendingDeleteTaskIds,
           taskAccessiblePositions,
           disableTaskActions,
+          activeTaskMenuId,
+          setActiveTaskMenuId,
+          (task) => beginPendingMove(task, null),
         )}
         dayContent={Array.from({ length: 7 }, (_, dayIndex) => {
           const dayDate = formatDateOnly(shiftDateByDays(weekStart, dayIndex));
@@ -686,6 +812,9 @@ export function BoardPage() {
             pendingDeleteTaskIds,
             taskAccessiblePositions,
             disableTaskActions,
+            activeTaskMenuId,
+            setActiveTaskMenuId,
+            (task) => beginPendingMove(task, dayDate),
           );
         })}
       />
@@ -732,6 +861,9 @@ function renderTasks(
   pendingDeleteTaskIds: ReadonlySet<string>,
   taskAccessiblePositions: ReadonlyMap<string, number>,
   disableTaskActions: boolean,
+  activeTaskMenuId: string | null,
+  setActiveTaskMenuId: (taskId: string | null) => void,
+  onRequestMove: (task: TaskPayload) => void,
 ) {
   if (tasks.length === 0) {
     return undefined;
@@ -848,6 +980,37 @@ function renderTasks(
             >
               ✕
             </button>
+            <button
+              type="button"
+              className="task-menu-button"
+              data-task-menu-trigger="true"
+              disabled={disableTaskActions}
+              aria-label={`More actions for ${task.title}`}
+              aria-haspopup="menu"
+              aria-expanded={activeTaskMenuId === task.id}
+              onClick={() =>
+                setActiveTaskMenuId(
+                  activeTaskMenuId === task.id ? null : task.id,
+                )
+              }
+            >
+              ⋯
+            </button>
+            {activeTaskMenuId === task.id ? (
+              <div
+                className="task-context-menu"
+                role="menu"
+                aria-label={`Actions for ${task.title}`}
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => onRequestMove(task)}
+                >
+                  Move
+                </button>
+              </div>
+            ) : null}
             {task.status === "In Progress" ? (
               <span className="task-progress-label">In progress</span>
             ) : null}

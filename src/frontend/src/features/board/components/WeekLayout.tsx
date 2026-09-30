@@ -19,6 +19,7 @@ export interface WeekLayoutProps {
   onAddTask?: (dayDate: Date | null) => void;
   onWeekLaneDragOver?: (event: React.DragEvent<HTMLElement>) => void;
   onWeekLaneDrop?: (event: React.DragEvent<HTMLElement>) => void;
+  onWeekLaneMoveHere?: () => void;
   onDayLaneDragOver?: (
     event: React.DragEvent<HTMLElement>,
     dayDate: string,
@@ -27,6 +28,7 @@ export interface WeekLayoutProps {
     event: React.DragEvent<HTMLElement>,
     dayDate: string,
   ) => void;
+  onDayLaneMoveHere?: (dayDate: string) => void;
 }
 
 export type BoardViewMode = "workweek" | "fullweek";
@@ -50,8 +52,10 @@ export function WeekLayout({
   onAddTask,
   onWeekLaneDragOver,
   onWeekLaneDrop,
+  onWeekLaneMoveHere,
   onDayLaneDragOver,
   onDayLaneDrop,
+  onDayLaneMoveHere,
 }: WeekLayoutProps) {
   const dayDates = getDayDatesInWeek(weekStart);
   const dayNames = [
@@ -76,6 +80,7 @@ export function WeekLayout({
         onAddTask={() => onAddTask?.(null)}
         onLaneDragOver={onWeekLaneDragOver}
         onLaneDrop={onWeekLaneDrop}
+        onMoveHere={onWeekLaneMoveHere}
       >
         {weekContent}
       </WeekSection>
@@ -93,6 +98,11 @@ export function WeekLayout({
               onDayLaneDragOver?.(event, formatDateOnly(date))
             }
             onLaneDrop={(event) => onDayLaneDrop?.(event, formatDateOnly(date))}
+            onMoveHere={
+              onDayLaneMoveHere
+                ? () => onDayLaneMoveHere(formatDateOnly(date))
+                : undefined
+            }
           >
             {dayContent?.[index]}
           </DayColumn>

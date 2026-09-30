@@ -33,9 +33,60 @@
 }
 
 .add-task-button,
-.edit-task-button {
+.edit-task-button,
+.task-menu-button {
   padding: 0.35rem 0.6rem;
   font-size: 0.85rem;
+}
+
+.task-menu-button {
+  min-width: 2rem;
+  padding: 0.35rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.task-menu-button:hover:not(:disabled),
+.task-menu-button:focus-visible {
+  background: transparent;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.task-context-menu {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.task-context-menu button,
+.move-here-button,
+.cancel-move-button {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+}
+
+.move-here-button {
+  margin-left: 0.5rem;
+  background: #1d4ed8;
+}
+
+.pending-move-flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 1.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #93c5fd;
+  border-radius: 0.5rem;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.cancel-move-button {
+  flex: 0 0 auto;
 }
 
 .edit-task-button {

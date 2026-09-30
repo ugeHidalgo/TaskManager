@@ -5,6 +5,7 @@ import {
   formatDateOnly,
   getBoardForWeek,
   getTasksForWeek,
+  moveTask,
   reorderTasks,
   updateTask,
 } from "./board";
@@ -165,6 +166,62 @@ describe("board api", () => {
           weekStartDate: "2026-08-03",
           dayDate: null,
           taskIds: ["task-2", "task-1"],
+        }),
+      }),
+    );
+  });
+
+  it("moves a task with source and destination snapshot versions", async () => {
+    const result = {
+      taskId: "task-1",
+      source: {
+        weekStartDate: "2026-08-03",
+        snapshotVersion: "source-version",
+        tasks: [],
+      },
+      destination: {
+        weekStartDate: "2026-08-10",
+        snapshotVersion: "destination-version",
+        tasks: [{ id: "task-1", dayDate: "2026-08-11", orderIndex: 0 }],
+      },
+    };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: result }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    await expect(
+      moveTask("jwt-token", "task-1", {
+        sourceWeekStartDate: "2026-08-03",
+        sourceDayDate: "2026-08-03",
+        sourceIndex: 1,
+        destinationWeekStartDate: "2026-08-10",
+        destinationDayDate: "2026-08-11",
+        destinationIndex: 0,
+        sourceSnapshotVersion: "source-version",
+        destinationSnapshotVersion: "destination-version",
+      }),
+    ).resolves.toEqual(result);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/tasks\/task-1\/move$/),
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer jwt-token",
+          "Content-Type": "application/json",
+        }),
+        body: JSON.stringify({
+          sourceWeekStartDate: "2026-08-03",
+          sourceDayDate: "2026-08-03",
+          sourceIndex: 1,
+          destinationWeekStartDate: "2026-08-10",
+          destinationDayDate: "2026-08-11",
+          destinationIndex: 0,
+          sourceSnapshotVersion: "source-version",
+          destinationSnapshotVersion: "destination-version",
         }),
       }),
     );

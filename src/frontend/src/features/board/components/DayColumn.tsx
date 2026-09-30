@@ -15,6 +15,7 @@ export interface DayColumnProps {
     dayDate: string,
   ) => void;
   onLaneDrop?: (event: React.DragEvent<HTMLElement>, dayDate: string) => void;
+  onMoveHere?: () => void;
 }
 
 /**
@@ -29,6 +30,7 @@ export function DayColumn({
   onAddTask,
   onLaneDragOver,
   onLaneDrop,
+  onMoveHere,
 }: DayColumnProps) {
   const formattedDate = formatDate(date);
   const isoDate = formatDateOnly(date);
@@ -58,6 +60,17 @@ export function DayColumn({
         >
           +
         </button>
+        {onMoveHere ? (
+          <button
+            type="button"
+            className="move-here-button"
+            data-move-here="true"
+            onClick={onMoveHere}
+            aria-label={`Move here to ${dayName}`}
+          >
+            Move here
+          </button>
+        ) : null}
       </header>
 
       <article
