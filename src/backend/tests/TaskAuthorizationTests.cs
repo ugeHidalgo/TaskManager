@@ -841,6 +841,145 @@ public sealed class TaskAuthorizationTests : IClassFixture<WebApplicationFactory
         }
     }
 
+    [Fact]
+    public async Task CreateRecurringTasks_CreatesIndependentTasksForEveryDateInInclusiveRange()
+    {
+        DateOnly firstWeek;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            do
+            {
+                firstWeek = GetRandomWeekStartDate();
+            }
+            while (await dbContext.WeekWorkspaces.AnyAsync(workspace =>
+                workspace.WeekStartDate == firstWeek || workspace.WeekStartDate == firstWeek.AddDays(7)));
+        }
+
+        var secondWeek = firstWeek.AddDays(7);
+        var startDate = firstWeek.AddDays(4);
+        var endDate = secondWeek;
+        var expectedDates = Enumerable.Range(0, 4).Select(startDate.AddDays).ToArray();
+        var batchId = $"recurring-integration-{Guid.NewGuid():N}";
+
+        try
+        {
+            string token;
+            using (var tokenScope = factory.Services.CreateScope())
+            {
+                token = tokenScope.ServiceProvider.GetRequiredService<IJwtTokenService>()
+                    .CreateToken(Guid.NewGuid(), "recurring-api-test")
+                    .Token;
+            }
+
+            using var client = factory.CreateClient();
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            client.DefaultRequestHeaders.Add("Idempotency-Key", batchId);
+
+            // Friday through Monday includes both endpoints, the weekend and a new workspace.
+            using var response = await client.PostAsJsonAsync("/api/v1/tasks/recurring", new
+            {
+                startDate,
+                endDate,
+                title = "Daily review",
+                notes = "Review the daily checklist",
+                status = "In Progress",
+                executionTime = "09:30",
+            });
+
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var data = body.RootElement.GetProperty("data");
+            var createdTasks = data.GetProperty("tasks").EnumerateArray().ToArray();
+            Assert.Equal(4, data.GetProperty("createdCount").GetInt32());
+            Assert.Equal(4, createdTasks.Length);
+            Assert.Equal(4, createdTasks.Select(task => task.GetProperty("id").GetGuid()).Distinct().Count());
+            Assert.Equal(expectedDates, createdTasks
+                .Select(task => DateOnly.Parse(task.GetProperty("dayDate").GetString()!)).OrderBy(date => date));
+            Assert.Equal(new[] { firstWeek, secondWeek }, data.GetProperty("affectedWeekStartDates")
+                .EnumerateArray().Select(date => DateOnly.Parse(date.GetString()!)).OrderBy(date => date));
+
+            var reloadedTasks = new List<JsonElement>();
+            foreach (var week in new[] { firstWeek, secondWeek })
+            {
+                using var reloadResponse = await client.GetAsync($"/api/v1/tasks?weekStartDate={week:yyyy-MM-dd}");
+                Assert.Equal(HttpStatusCode.OK, reloadResponse.StatusCode);
+                using var reloadBody = JsonDocument.Parse(await reloadResponse.Content.ReadAsStringAsync());
+                var weekTasks = reloadBody.RootElement.GetProperty("data").EnumerateArray().ToArray();
+                Assert.Equal(week == firstWeek ? 3 : 1, weekTasks.Length);
+                Assert.All(weekTasks, task =>
+                {
+                    var day = DateOnly.Parse(task.GetProperty("dayDate").GetString()!);
+                    Assert.InRange(day, week, week.AddDays(6));
+                    Assert.Equal("Daily review", task.GetProperty("title").GetString());
+                    Assert.Equal("Review the daily checklist", task.GetProperty("notes").GetString());
+                    Assert.Equal("In Progress", task.GetProperty("status").GetString());
+                    Assert.Equal("09:30", task.GetProperty("executionTime").GetString());
+                });
+                reloadedTasks.AddRange(weekTasks.Select(task => task.Clone()));
+            }
+
+            Assert.Equal(expectedDates, reloadedTasks
+                .Select(task => DateOnly.Parse(task.GetProperty("dayDate").GetString()!)).OrderBy(date => date));
+            Assert.Equal(createdTasks.Select(task => task.GetProperty("id").GetGuid()).OrderBy(id => id),
+                reloadedTasks.Select(task => task.GetProperty("id").GetGuid()).OrderBy(id => id));
+
+            var firstTask = Assert.Single(reloadedTasks.Where(task =>
+                task.GetProperty("dayDate").GetString() == startDate.ToString("yyyy-MM-dd")));
+            var firstTaskId = firstTask.GetProperty("id").GetGuid();
+            using var updateResponse = await client.PutAsJsonAsync($"/api/v1/tasks/{firstTaskId}", new
+            {
+                weekStartDate = firstWeek,
+                dayDate = startDate,
+                title = "Updated first review",
+                notes = "Only this task changed",
+                status = "Completed",
+                executionTime = "10:30",
+            });
+            Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+
+            // Verify persistence in a fresh scope, not the request's tracked entities.
+            await using var verificationScope = factory.Services.CreateAsyncScope();
+            var verificationContext = verificationScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            var persistedTasks = await verificationContext.Tasks.AsNoTracking()
+                .Where(task => task.BatchId == batchId).OrderBy(task => task.DayDate).ToListAsync();
+            Assert.Equal(expectedDates, persistedTasks.Select(task => task.DayDate!.Value));
+            var workspaces = await verificationContext.WeekWorkspaces.AsNoTracking()
+                .Where(workspace => workspace.WeekStartDate == firstWeek || workspace.WeekStartDate == secondWeek)
+                .ToDictionaryAsync(workspace => workspace.Id);
+            Assert.Equal(2, workspaces.Count);
+            Assert.All(persistedTasks, task => Assert.Equal(
+                task.DayDate!.Value == endDate ? secondWeek : firstWeek,
+                workspaces[task.WeekWorkspaceId].WeekStartDate));
+            var editedTask = Assert.Single(persistedTasks.Where(task => task.Id == firstTaskId));
+            Assert.Equal("Updated first review", editedTask.Title);
+            Assert.Equal("Only this task changed", editedTask.Notes);
+            Assert.Equal("Completed", editedTask.Status);
+            Assert.Equal("10:30", editedTask.ExecutionTime);
+            Assert.All(persistedTasks.Where(task => task.Id != firstTaskId), task =>
+            {
+                Assert.Equal("Daily review", task.Title);
+                Assert.Equal("Review the daily checklist", task.Notes);
+                Assert.Equal("In Progress", task.Status);
+                Assert.Equal("09:30", task.ExecutionTime);
+            });
+        }
+        finally
+        {
+            await using var cleanupScope = factory.Services.CreateAsyncScope();
+            var cleanupContext = cleanupScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            cleanupContext.Tasks.RemoveRange(await cleanupContext.Tasks
+                .Where(task => task.BatchId == batchId).ToListAsync());
+            await cleanupContext.SaveChangesAsync();
+            cleanupContext.WeekWorkspaces.RemoveRange(await cleanupContext.WeekWorkspaces
+                .Where(workspace => (workspace.WeekStartDate == firstWeek || workspace.WeekStartDate == secondWeek)
+                    && !cleanupContext.Tasks.Any(task => task.WeekWorkspaceId == workspace.Id))
+                .ToListAsync());
+            await cleanupContext.SaveChangesAsync();
+        }
+    }
+
     private static DateOnly GetRandomWeekStartDate()
     {
         var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(Random.Shared.Next(365, 36500)));

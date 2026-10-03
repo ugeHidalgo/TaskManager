@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   formatDateOnly,
   type SaveTaskInput,
@@ -87,7 +87,12 @@ export function TaskEditor({
     task?.status ?? "Not Started",
   );
   const [executionTime, setExecutionTime] = useState(task?.executionTime ?? "");
-  const recurringBatchId = useId();
+  // Random across page loads, stable across retries of this editor's submission.
+  const [recurringBatchId] = useState(() =>
+    Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join(""),
+  );
   const [isRecurring, setIsRecurring] = useState(false);
   const [startDate, setStartDate] = useState(formatDateOnly(weekStart));
   const [endDate, setEndDate] = useState(() =>

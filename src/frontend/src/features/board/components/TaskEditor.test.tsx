@@ -28,7 +28,7 @@ function renderEditor(
 ) {
   const onCancel = vi.fn();
   const onSave = vi.fn();
-  const { container } = render(
+  const result = render(
     <TaskEditor
       weekStart={weekStart}
       initialDayDate={initialDayDate}
@@ -39,7 +39,7 @@ function renderEditor(
       onSave={onSave}
     />,
   );
-  return { onCancel, onSave, container };
+  return { ...result, onCancel, onSave };
 }
 
 afterEach(() => {
@@ -242,6 +242,63 @@ describe("TaskEditor execution time", () => {
       "Start date must be on or before end date.",
     );
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("keeps the random batch key when retrying after a save error and rerender", async () => {
+    const user = userEvent.setup();
+    const { onCancel, onSave, rerender } = renderEditor(undefined, null);
+    await user.type(
+      screen.getByRole("textbox", { name: "Title" }),
+      "Daily review",
+    );
+    await user.click(screen.getByRole("checkbox", { name: "Recurring task" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    const firstKey = onSave.mock.calls[0][0].idempotencyKey;
+
+    expect(firstKey).toMatch(/^[0-9a-f]{32}$/);
+    rerender(
+      <TaskEditor
+        weekStart={weekStart}
+        initialDayDate={null}
+        isSaving={false}
+        errorMessage="Could not save the task."
+        onCancel={onCancel}
+        onSave={onSave}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Could not save the task.",
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledTimes(2);
+    expect(onSave.mock.calls[1][0]).toEqual(onSave.mock.calls[0][0]);
+  });
+
+  it("generates a different random batch key for a newly opened editor", async () => {
+    const user = userEvent.setup();
+    const firstEditor = renderEditor(undefined, null);
+    await user.type(
+      screen.getByRole("textbox", { name: "Title" }),
+      "Daily review",
+    );
+    await user.click(screen.getByRole("checkbox", { name: "Recurring task" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    const firstKey = firstEditor.onSave.mock.calls[0][0].idempotencyKey;
+    firstEditor.unmount();
+
+    const secondEditor = renderEditor(undefined, null);
+    await user.type(
+      screen.getByRole("textbox", { name: "Title" }),
+      "Daily review",
+    );
+    await user.click(screen.getByRole("checkbox", { name: "Recurring task" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    const secondKey = secondEditor.onSave.mock.calls[0][0].idempotencyKey;
+
+    expect(firstKey).toMatch(/^[0-9a-f]{32}$/);
+    expect(secondKey).toMatch(/^[0-9a-f]{32}$/);
+    expect(secondKey).not.toBe(firstKey);
   });
 
   it("initializes with the existing time and supports 30-minute steps", async () => {
