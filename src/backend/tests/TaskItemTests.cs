@@ -128,6 +128,14 @@ public sealed class TaskItemTests
     }
 
     [Fact]
+    public void Create_AllowsNotDoneStatus()
+    {
+        var task = TaskItem.Create(WorkspaceId, WeekStart, "Plan sprint", status: "Not done");
+
+        Assert.Equal("Not done", task.Status);
+    }
+
+    [Fact]
     public void Update_ChangesPlacementAndNormalizesValues()
     {
         var task = TaskItem.Create(WorkspaceId, WeekStart, "Draft notes");
@@ -143,6 +151,16 @@ public sealed class TaskItemTests
         Assert.Equal("Ready for review", task.Notes);
         Assert.Equal("In Progress", task.Status);
         Assert.Equal(new DateOnly(2026, 8, 18), task.DayDate);
+    }
+
+    [Fact]
+    public void Update_AllowsNotDoneStatus()
+    {
+        var task = TaskItem.Create(WorkspaceId, WeekStart, "Plan sprint");
+
+        task.Update(WeekStart, "Plan sprint", null, null, "Not done");
+
+        Assert.Equal("Not done", task.Status);
     }
 
     [Fact]

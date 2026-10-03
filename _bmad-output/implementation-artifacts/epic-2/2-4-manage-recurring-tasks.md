@@ -1,6 +1,6 @@
 # Story 2.4: Manage Recurring Tasks
 
-Status: ready-for-dev
+Status: in-progress
 
 Epic: 2 - Task Lifecycle and Completion
 Story ID: 2.4
@@ -38,10 +38,10 @@ so that I can plan repeated work without separate daily checks or a recurring te
 
 ### Task 2 - "Not done" task status
 
-- [ ] Add a new `Not done` task status, placed last in the status list (`Not Started`, `In Progress`, `Completed`, `Not done`), accepted and validated by both frontend and backend.
-- [ ] Show `Completed` tasks in gray only, without strikethrough.
-- [ ] Show `Not done` tasks in gray with strikethrough text.
-- [ ] Make the task checkbox cycle through `Not Started` → `In Progress` → `Completed` → `Not done` → `Not Started`, with accessible labels and feedback for each transition.
+- [x] Add a new `Not done` task status, placed last in the status list (`Not Started`, `In Progress`, `Completed`, `Not done`), accepted and validated by both frontend and backend.
+- [x] Show `Completed` tasks in gray only, without strikethrough.
+- [x] Show `Not done` tasks in gray with strikethrough text.
+- [x] Make the task checkbox cycle through `Not Started` → `In Progress` → `Completed` → `Not done` → `Not Started`, with accessible labels and feedback for each transition.
 
 ### Task 3 - Atomic per-day task creation
 
@@ -88,6 +88,10 @@ so that I can plan repeated work without separate daily checks or a recurring te
 - [Source: _bmad-output/implementation-artifacts/epic-2/2-1-create-and-edit-tasks-in-day-and-shared-week-context.md]
 - [Source: _bmad-output/implementation-artifacts/epic-2/2-3-add-task-execution-time.md]
 
+## Related Bug Report
+
+- [Recurring task date-range batch creation defect](bug-2-4-recurring-task-date-range.md) — Open; root cause not investigated.
+
 ## Definition of Done
 
 - [ ] The New Task checkbox and conditional date pickers produce the correct defaults for both board views; regular creation is unchanged.
@@ -99,8 +103,28 @@ so that I can plan repeated work without separate daily checks or a recurring te
 
 ### Agent Model Used
 
+GPT-6 Luna
+
 ### Debug Log References
+
+- Focused frontend tests: 49 passed.
+- Focused backend tests: 25 passed.
+- Frontend production build and lint passed.
 
 ### Completion Notes List
 
+- Added and validated the `Not done` task status in the domain and typed frontend status model.
+- Updated status selection, card appearance, accessible checkbox action labels, and live transition feedback.
+- Story remains in progress; Tasks 3–5 and the overall Definition of Done are not complete.
+
 ### File List
+
+- [TaskItem domain](../../../src/backend/src/TaskManager.Domain/Board/TaskItem.cs)
+- [Task domain tests](../../../src/backend/tests/TaskItemTests.cs)
+- [Task API tests](../../../src/backend/tests/TaskApiTests.cs)
+- [Board API types](../../../src/frontend/src/api/board.ts)
+- [Task editor](../../../src/frontend/src/features/board/components/TaskEditor.tsx)
+- [Task editor tests](../../../src/frontend/src/features/board/components/TaskEditor.test.tsx)
+- [Board page](../../../src/frontend/src/pages/BoardPage.tsx)
+- [Board page tests](../../../src/frontend/src/pages/BoardPage.test.tsx)
+- [Board layout styles](../../../src/frontend/src/features/board/styles/board-layout.css)

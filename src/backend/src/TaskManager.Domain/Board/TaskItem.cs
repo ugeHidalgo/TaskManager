@@ -4,7 +4,7 @@ public sealed class TaskItem
 {
     private const string DefaultStatus = "Not Started";
     private const string InvalidExecutionTimeMessage = "Execution time must be empty or within the range 00:00 - 23:59.";
-    private static readonly string[] AllowedStatuses = ["Not Started", "In Progress", "Completed"];
+    private static readonly string[] AllowedStatuses = ["Not Started", "In Progress", "Completed", "Not done"];
 
     private TaskItem()
     {

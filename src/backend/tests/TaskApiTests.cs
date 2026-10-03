@@ -503,7 +503,7 @@ public sealed class TaskApiTests
         var expectedTaskIds = new[] { firstTask.Id, task.Id, lastTask.Id };
         var context = CreateContext();
 
-        foreach (var status in new[] { "Completed", "In Progress" })
+        foreach (var status in new[] { "Completed", "In Progress", "Not done" })
         {
             await using (var updateContext = new TaskManagerDbContext(options))
             {

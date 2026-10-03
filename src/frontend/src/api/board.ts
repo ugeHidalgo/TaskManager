@@ -17,6 +17,12 @@ export interface BoardPayload {
   snapshotVersion: string;
 }
 
+export type TaskStatus =
+  | "Not Started"
+  | "In Progress"
+  | "Completed"
+  | "Not done";
+
 export interface TaskPayload {
   id: string;
   weekWorkspaceId: string;
@@ -24,7 +30,7 @@ export interface TaskPayload {
   orderIndex?: number;
   title: string;
   notes: string | null;
-  status: string;
+  status: TaskStatus;
   executionTime: string;
   createdAtUtc: string;
   updatedAtUtc: string;
@@ -70,7 +76,7 @@ export interface SaveTaskInput {
   title: string;
   dayDate: string | null;
   notes: string | null;
-  status: string;
+  status: TaskStatus;
   executionTime: string;
   isRecurring?: boolean;
   startDate?: string;

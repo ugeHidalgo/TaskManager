@@ -3,6 +3,7 @@ import {
   formatDateOnly,
   type SaveTaskInput,
   type TaskPayload,
+  type TaskStatus,
 } from "../../../api/board";
 
 interface TaskEditorProps {
@@ -82,7 +83,9 @@ export function TaskEditor({
   const [dayDate, setDayDate] = useState(
     task?.dayDate ?? (initialDayDate ? formatDateOnly(initialDayDate) : ""),
   );
-  const [status, setStatus] = useState(task?.status ?? "Not Started");
+  const [status, setStatus] = useState<TaskStatus>(
+    task?.status ?? "Not Started",
+  );
   const [executionTime, setExecutionTime] = useState(task?.executionTime ?? "");
   const recurringBatchId = useId();
   const [isRecurring, setIsRecurring] = useState(false);
@@ -410,11 +413,12 @@ export function TaskEditor({
           <select
             id="task-status"
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
+            onChange={(event) => setStatus(event.target.value as TaskStatus)}
           >
             <option>Not Started</option>
             <option>In Progress</option>
             <option>Completed</option>
+            <option>Not done</option>
           </select>
 
           {validationMessage || errorMessage ? (

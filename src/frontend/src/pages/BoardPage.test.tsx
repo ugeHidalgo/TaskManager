@@ -8,7 +8,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { formatDateOnly } from "../api/board";
+import { formatDateOnly, type TaskStatus } from "../api/board";
 import {
   getWeekRange,
   shiftDateByDays,
@@ -71,7 +71,7 @@ function makeTask(
   id: string,
   title: string,
   dayDate: string | null,
-  status = "Not Started",
+  status: TaskStatus = "Not Started",
   executionTime = "",
 ) {
   return {
@@ -853,7 +853,7 @@ describe("BoardPage week navigation", () => {
       const url = new URL(String(input));
       if (init?.method === "PUT") {
         const body = JSON.parse(String(init.body)) as {
-          status: string;
+          status: TaskStatus;
           executionTime: string;
         };
         savedStatuses.push(body.status);
@@ -901,7 +901,7 @@ describe("BoardPage week navigation", () => {
     await user.keyboard(" ");
 
     const completedTaskCheckbox = await screen.findByRole("checkbox", {
-      name: "Task 1: Reopen Keyboard task",
+      name: "Task 1: Mark as not done Keyboard task",
     });
     await waitFor(() => expect(completedTaskCheckbox).toBeChecked());
     expect(screen.getByRole("status")).toHaveTextContent("Task completed.");
@@ -910,13 +910,30 @@ describe("BoardPage week navigation", () => {
     completedTaskCheckbox.focus();
     await user.keyboard(" ");
 
+    const notDoneCheckbox = await screen.findByRole("checkbox", {
+      name: "Task 1: Reopen Keyboard task",
+    });
+    await waitFor(() => expect(notDoneCheckbox).not.toBeChecked());
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Task marked not done.",
+    );
+    expect(savedStatuses).toEqual(["In Progress", "Completed", "Not done"]);
+
+    notDoneCheckbox.focus();
+    await user.keyboard(" ");
+
     const reopenedCheckbox = await screen.findByRole("checkbox", {
       name: "Task 1: Start Keyboard task",
     });
     await waitFor(() => expect(reopenedCheckbox).not.toBeChecked());
     expect(screen.getByRole("status")).toHaveTextContent("Task reopened.");
-    expect(savedStatuses).toEqual(["In Progress", "Completed", "Not Started"]);
-    expect(savedExecutionTimes).toEqual(["09:30", "09:30", "09:30"]);
+    expect(savedStatuses).toEqual([
+      "In Progress",
+      "Completed",
+      "Not done",
+      "Not Started",
+    ]);
+    expect(savedExecutionTimes).toEqual(["09:30", "09:30", "09:30", "09:30"]);
     expect(storedTasks[0].status).toBe("Not Started");
   });
 
@@ -1019,7 +1036,7 @@ describe("BoardPage week navigation", () => {
     );
 
     const reopenCheckbox = await screen.findByRole("checkbox", {
-      name: "Task 1: Reopen Completed task title",
+      name: "Task 1: Mark as not done Completed task title",
       checked: true,
     });
     const card = screen.getByText("Completed task title").closest(".task-item");
@@ -1052,6 +1069,10 @@ describe("BoardPage week navigation", () => {
       {
         ...makeTask("completed-task", "Completed title", null, "Completed"),
         notes: "Completed notes",
+      },
+      {
+        ...makeTask("not-done-task", "Not done title", null, "Not done"),
+        notes: "Not done notes",
       },
     ];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
@@ -1127,9 +1148,12 @@ describe("BoardPage week navigation", () => {
     expect(completedCard.querySelector(".task-title")).toHaveClass(
       "task-title-completed",
     );
+    expect(completedCard.querySelector(".task-title")).not.toHaveClass(
+      "task-title-not-done",
+    );
     expect(
       within(completedCard).getByRole("checkbox", {
-        name: "Task 3: Reopen Completed title",
+        name: "Task 3: Mark as not done Completed title",
       }),
     ).toBeVisible();
     expect(
@@ -1143,6 +1167,25 @@ describe("BoardPage week navigation", () => {
       }),
     ).toBeVisible();
     expect(within(completedCard).getAllByRole("button")).toHaveLength(4);
+
+    const notDoneCard = screen
+      .getByText("Not done title")
+      .closest(".task-item") as HTMLElement;
+    expect(notDoneCard).toHaveClass("task-item-not-done");
+    expect(notDoneCard.querySelector(".task-title")).toHaveClass(
+      "task-title-not-done",
+    );
+    expect(notDoneCard.querySelector(".task-description")).toHaveTextContent(
+      "Not done notes",
+    );
+    expect(notDoneCard.querySelector(".task-not-done-label")).toHaveTextContent(
+      "Not done",
+    );
+    expect(
+      within(notDoneCard).getByRole("checkbox", {
+        name: "Task 4: Reopen Not done title",
+      }),
+    ).not.toBeChecked();
   });
 
   it("cancels or confirms permanent task deletion", async () => {
@@ -1226,7 +1269,7 @@ describe("BoardPage week navigation", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = new URL(String(input));
       if (init?.method === "PUT") {
-        const body = JSON.parse(String(init.body)) as { status: string };
+        const body = JSON.parse(String(init.body)) as { status: TaskStatus };
         const taskId = url.pathname.split("/").pop();
         storedTasks = storedTasks.map((task) =>
           task.id === taskId ? { ...task, status: body.status } : task,
@@ -1334,7 +1377,7 @@ describe("BoardPage week navigation", () => {
     );
 
     const reopenCheckbox = await screen.findByRole("checkbox", {
-      name: "Task 1: Reopen Keep completed task",
+      name: "Task 1: Mark as not done Keep completed task",
     });
     await user.click(reopenCheckbox);
 

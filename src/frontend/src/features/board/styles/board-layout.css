@@ -210,6 +210,11 @@
   border-color: #d1d5db;
 }
 
+.task-item.task-item-not-done {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
 .task-content {
   display: grid;
   width: 100%;
@@ -302,6 +307,11 @@
 }
 
 .task-title-completed {
+  color: #6b7280;
+}
+
+.task-title-not-done {
+  color: #6b7280;
   text-decoration: line-through;
 }
 
@@ -320,6 +330,13 @@
   border-radius: 999px;
   background: #dbeafe;
   color: #1d4ed8;
+  font-size: 0.65rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.task-not-done-label {
+  color: #6b7280;
   font-size: 0.65rem;
   font-weight: 600;
   white-space: nowrap;

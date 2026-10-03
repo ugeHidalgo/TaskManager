@@ -57,7 +57,7 @@ development_status:
   2-1-create-and-edit-tasks-in-day-and-shared-week-context: done
   2-2-keep-completed-tasks-visible-and-reopenable: done
   2-3-add-task-execution-time: in-progress
-  2-4-manage-recurring-tasks: ready-for-dev
+  2-4-manage-recurring-tasks: in-progress
   2-5-compute-day-and-week-completion-status: ready-for-dev
   2-6-protect-unsaved-changes-during-navigation: ready-for-dev
   epic-2-retrospective: optional

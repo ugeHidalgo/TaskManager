@@ -572,7 +572,9 @@ export function BoardPage() {
           ? "Task completed."
           : nextStatus === "In Progress"
             ? "Task started."
-            : "Task reopened.",
+            : nextStatus === "Not done"
+              ? "Task marked not done."
+              : "Task reopened.",
       );
       setStatusMessagePhase("blinking");
     } catch (error) {
@@ -871,6 +873,7 @@ function renderTasks(
 
   return tasks.map((task) => {
     const isCompleted = task.status === "Completed";
+    const isNotDone = task.status === "Not done";
     const nextStatus = getNextTaskStatus(task.status);
     const isUpdatingStatus = pendingStatusTaskIds.has(task.id);
     const isDeleting = pendingDeleteTaskIds.has(task.id);
@@ -883,7 +886,7 @@ function renderTasks(
     return (
       <div
         key={task.id}
-        className={`task-item${isCompleted ? " task-item-completed" : ""}${isDropTarget ? " task-item-drop-target" : ""}`}
+        className={`task-item${isCompleted ? " task-item-completed" : ""}${isNotDone ? " task-item-not-done" : ""}${isDropTarget ? " task-item-drop-target" : ""}`}
         aria-busy={isUpdatingStatus || isDeleting}
         draggable={!disableTaskActions}
         onDragStart={() => setDraggedTask({ taskId: task.id, laneKey })}
@@ -936,7 +939,7 @@ function renderTasks(
               </time>
             ) : null}
             <strong
-              className={`task-title${isCompleted ? " task-title-completed" : ""}`}
+              className={`task-title${isCompleted ? " task-title-completed" : ""}${isNotDone ? " task-title-not-done" : ""}`}
             >
               {task.title}
             </strong>
@@ -1017,6 +1020,9 @@ function renderTasks(
             {task.status === "Not Started" ? (
               <span className="task-not-started-label">Not Started</span>
             ) : null}
+            {isNotDone ? (
+              <span className="task-not-done-label">Not done</span>
+            ) : null}
           </div>
           {!isCompleted && task.notes ? (
             <div className="task-description">{task.notes}</div>
@@ -1061,8 +1067,12 @@ function replaceLaneTasks(
 function getNextTaskStatus(
   status: TaskPayload["status"],
 ): TaskPayload["status"] {
-  if (status === "Completed") {
+  if (status === "Not done") {
     return "Not Started";
+  }
+
+  if (status === "Completed") {
+    return "Not done";
   }
 
   if (status === "Not Started") {
@@ -1073,12 +1083,16 @@ function getNextTaskStatus(
 }
 
 function getTaskStatusAction(status: TaskPayload["status"]): string {
+  if (status === "In Progress") {
+    return "Start";
+  }
+
   if (status === "Completed") {
     return "Complete";
   }
 
-  if (status === "In Progress") {
-    return "Start";
+  if (status === "Not done") {
+    return "Mark as not done";
   }
 
   return "Reopen";

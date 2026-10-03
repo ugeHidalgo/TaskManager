@@ -148,6 +148,25 @@ describe("TaskEditor execution time", () => {
     ).toBeTruthy();
   });
 
+  it("offers Not done as the last task status and submits it", async () => {
+    const user = userEvent.setup();
+    const { onSave } = renderEditor();
+    const status = screen.getByLabelText("Status");
+
+    expect(
+      Array.from(status.querySelectorAll("option")).map(
+        (option) => option.textContent,
+      ),
+    ).toEqual(["Not Started", "In Progress", "Completed", "Not done"]);
+    await user.selectOptions(status, "Not done");
+    await user.type(screen.getByRole("textbox", { name: "Title" }), "Task");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "Not done" }),
+    );
+  });
+
   it.each([
     ["workweek", "2026-08-21"],
     ["fullweek", "2026-08-23"],
