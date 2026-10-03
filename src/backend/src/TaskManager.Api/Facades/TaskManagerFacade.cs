@@ -314,6 +314,21 @@ public sealed class TaskManagerFacade
                     requestId: httpContext.TraceIdentifier));
             }
 
+            if (request.SnapshotVersion is not null)
+            {
+                var snapshot = workspace is null
+                    ? null
+                    : await CreateWeekSnapshotAsync(dbContext, workspace, cancellationToken);
+                if (snapshot is null
+                    || !string.Equals(snapshot.SnapshotVersion, request.SnapshotVersion, StringComparison.Ordinal))
+                {
+                    return Results.Conflict(ApiErrorResponse.Create(
+                        code: "task.order.conflict",
+                        message: "The board changed. Reload and try again.",
+                        requestId: httpContext.TraceIdentifier));
+                }
+            }
+
             var laneTasksById = laneTasks.ToDictionary(task => task.Id);
             var sequenceChanged = request.TaskIds
                 .Where((taskId, index) => laneTasks[index].Id != taskId)

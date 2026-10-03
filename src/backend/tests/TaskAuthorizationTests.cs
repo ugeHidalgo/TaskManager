@@ -603,6 +603,151 @@ public sealed class TaskAuthorizationTests : IClassFixture<WebApplicationFactory
     }
 
     [Fact]
+    public async Task ReorderTasks_StaleSnapshotReturnsConflictAndCurrentSnapshotSucceedsThroughApi()
+    {
+        DateOnly weekStartDate;
+        Guid workspaceId;
+        Guid firstTaskId;
+        Guid secondTaskId;
+        var dayDate = default(DateOnly);
+
+        await using (var seedScope = factory.Services.CreateAsyncScope())
+        {
+            var dbContext = seedScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            do
+            {
+                weekStartDate = GetRandomWeekStartDate();
+            }
+            while (await dbContext.WeekWorkspaces.AnyAsync(workspace => workspace.WeekStartDate == weekStartDate));
+
+            dayDate = weekStartDate.AddDays(2);
+            var workspace = WeekWorkspace.Create(weekStartDate);
+            var first = TaskItem.Create(workspace.Id, weekStartDate, "First", dayDate, "Keep first", "Completed", "08:30");
+            var second = TaskItem.Create(workspace.Id, weekStartDate, "Second", dayDate, "Keep second", "In Progress", "09:30");
+            first.SetOrderIndex(0);
+            second.SetOrderIndex(1);
+            workspaceId = workspace.Id;
+            firstTaskId = first.Id;
+            secondTaskId = second.Id;
+            dbContext.WeekWorkspaces.Add(workspace);
+            dbContext.Tasks.AddRange(first, second);
+            await dbContext.SaveChangesAsync();
+        }
+
+        try
+        {
+            string token;
+            using (var tokenScope = factory.Services.CreateScope())
+            {
+                token = tokenScope.ServiceProvider.GetRequiredService<IJwtTokenService>()
+                    .CreateToken(Guid.NewGuid(), "reorder-snapshot-test")
+                    .Token;
+            }
+
+            using var client = factory.CreateClient();
+            client.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var staleSnapshotVersion = await GetSnapshotVersionAsync(client, weekStartDate);
+            var concurrentResponse = await client.PutAsJsonAsync("/api/v1/tasks/reorder", new
+            {
+                weekStartDate = weekStartDate.ToString("yyyy-MM-dd"),
+                dayDate = dayDate.ToString("yyyy-MM-dd"),
+                taskIds = new[] { secondTaskId, firstTaskId },
+                snapshotVersion = staleSnapshotVersion,
+            });
+            Assert.Equal(HttpStatusCode.OK, concurrentResponse.StatusCode);
+            var currentSnapshotVersion = await GetSnapshotVersionAsync(client, weekStartDate);
+            Assert.NotEqual(staleSnapshotVersion, currentSnapshotVersion);
+
+            List<TaskItem> before;
+            await using (var beforeScope = factory.Services.CreateAsyncScope())
+            {
+                var dbContext = beforeScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+                Assert.True(dbContext.Database.IsNpgsql());
+                before = await dbContext.Tasks.AsNoTracking()
+                    .Where(task => task.WeekWorkspaceId == workspaceId)
+                    .OrderBy(task => task.Id).ToListAsync();
+            }
+
+            var staleResponse = await client.PutAsJsonAsync("/api/v1/tasks/reorder", new
+            {
+                weekStartDate = weekStartDate.ToString("yyyy-MM-dd"),
+                dayDate = dayDate.ToString("yyyy-MM-dd"),
+                taskIds = new[] { firstTaskId, secondTaskId },
+                snapshotVersion = staleSnapshotVersion,
+            });
+
+            Assert.Equal(HttpStatusCode.Conflict, staleResponse.StatusCode);
+            using var staleBody = JsonDocument.Parse(await staleResponse.Content.ReadAsStringAsync());
+            Assert.Equal("task.order.conflict", staleBody.RootElement
+                .GetProperty("error").GetProperty("code").GetString());
+            Assert.Equal("The board changed. Reload and try again.", staleBody.RootElement
+                .GetProperty("error").GetProperty("message").GetString());
+            Assert.Equal(currentSnapshotVersion, await GetSnapshotVersionAsync(client, weekStartDate));
+            await using (var verificationScope = factory.Services.CreateAsyncScope())
+            {
+                var dbContext = verificationScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+                var after = await dbContext.Tasks.AsNoTracking()
+                    .Where(task => task.WeekWorkspaceId == workspaceId)
+                    .OrderBy(task => task.Id).ToListAsync();
+                Assert.Equal(JsonSerializer.Serialize(before), JsonSerializer.Serialize(after));
+                Assert.Equal(new[] { secondTaskId, firstTaskId }, after.OrderBy(task => task.OrderIndex).Select(task => task.Id));
+            }
+
+            var validResponse = await client.PutAsJsonAsync("/api/v1/tasks/reorder", new
+            {
+                weekStartDate = weekStartDate.ToString("yyyy-MM-dd"),
+                dayDate = dayDate.ToString("yyyy-MM-dd"),
+                taskIds = new[] { firstTaskId, secondTaskId },
+                snapshotVersion = currentSnapshotVersion,
+            });
+            Assert.Equal(HttpStatusCode.OK, validResponse.StatusCode);
+            using var validBody = JsonDocument.Parse(await validResponse.Content.ReadAsStringAsync());
+            Assert.Equal(new[] { firstTaskId, secondTaskId }, validBody.RootElement
+                .GetProperty("data").GetProperty("tasks").EnumerateArray()
+                .Select(task => task.GetProperty("id").GetGuid()));
+
+            await using var successScope = factory.Services.CreateAsyncScope();
+            var successContext = successScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            var persistedTasks = await successContext.Tasks.AsNoTracking()
+                .Where(task => task.WeekWorkspaceId == workspaceId)
+                .OrderBy(task => task.OrderIndex).ToListAsync();
+            Assert.Equal(new[] { firstTaskId, secondTaskId }, persistedTasks.Select(task => task.Id));
+            Assert.Equal(new[] { 0, 1 }, persistedTasks.Select(task => task.OrderIndex));
+            Assert.Equal("Completed", persistedTasks[0].Status);
+            Assert.Equal("08:30", persistedTasks[0].ExecutionTime);
+            Assert.Equal("09:30", persistedTasks[1].ExecutionTime);
+            foreach (var task in persistedTasks)
+            {
+                var original = before.Single(candidate => candidate.Id == task.Id);
+                Assert.Equal(original.Title, task.Title);
+                Assert.Equal(original.Notes, task.Notes);
+                Assert.Equal(original.Status, task.Status);
+                Assert.Equal(original.ExecutionTime, task.ExecutionTime);
+                Assert.Equal(original.DayDate, task.DayDate);
+                Assert.Equal(original.WeekWorkspaceId, task.WeekWorkspaceId);
+                Assert.Equal(original.CreatedAtUtc, task.CreatedAtUtc);
+                Assert.Equal(original.UpdatedAtUtc, task.UpdatedAtUtc);
+            }
+        }
+        finally
+        {
+            await using var cleanupScope = factory.Services.CreateAsyncScope();
+            var cleanupContext = cleanupScope.ServiceProvider.GetRequiredService<TaskManagerDbContext>();
+            cleanupContext.Tasks.RemoveRange(await cleanupContext.Tasks
+                .Where(task => task.WeekWorkspaceId == workspaceId).ToListAsync());
+            var workspace = await cleanupContext.WeekWorkspaces
+                .SingleOrDefaultAsync(candidate => candidate.Id == workspaceId);
+            if (workspace is not null)
+            {
+                cleanupContext.WeekWorkspaces.Remove(workspace);
+            }
+
+            await cleanupContext.SaveChangesAsync();
+        }
+    }
+
+    [Fact]
     public async Task UpdateTask_ReturnsUnauthorizedEnvelopeWithoutToken()
     {
         DateOnly weekStartDate;

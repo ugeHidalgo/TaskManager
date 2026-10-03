@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { sha256 } from "js-sha256";
 import { useNavigate } from "react-router-dom";
 import {
   formatDateOnly,
+  BoardMutationError,
   createTask,
   createRecurringTasks,
   deleteTask,
@@ -23,6 +25,7 @@ import {
   useWeekCalculation,
   formatWeekDisplay,
   shiftDateByDays,
+  getWeekRange,
 } from "../features/board/hooks/useWeekCalculation";
 import { getToken } from "../lib/session";
 
@@ -33,6 +36,18 @@ type PendingMove = {
   title: string;
   sourceWeekStartDate: string;
   sourceDayDate: string | null;
+};
+
+type DropTarget = {
+  laneKey: string;
+  taskId: string | null;
+  valid: boolean;
+  message: string;
+};
+type BoardMutation = {
+  id: number;
+  kind: "move" | "reorder";
+  phase: "pending" | "reconciling";
 };
 
 function getInitialBoardViewMode(): BoardViewMode {
@@ -55,20 +70,20 @@ export function BoardPage() {
   const [pendingDeleteTaskIds, setPendingDeleteTaskIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const [pendingReorderLane, setPendingReorderLane] = useState<string | null>(
+  const [boardMutation, setBoardMutation] = useState<BoardMutation | null>(
     null,
   );
+  const boardGeneration = useRef(0);
+  const activeMutationId = useRef<number | null>(null);
+  const dragWasDropped = useRef(false);
+  const [snapshotVersion, setSnapshotVersion] = useState<string | null>(null);
   const [draggedTask, setDraggedTask] = useState<{
     taskId: string;
     laneKey: string;
   } | null>(null);
-  const [dropTarget, setDropTarget] = useState<{
-    laneKey: string;
-    taskId: string;
-  } | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [activeTaskMenuId, setActiveTaskMenuId] = useState<string | null>(null);
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
-  const [isMoving, setIsMoving] = useState(false);
   const [loadedWeekStartDate, setLoadedWeekStartDate] = useState<string | null>(
     null,
   );
@@ -84,6 +99,14 @@ export function BoardPage() {
   const { weekStart, weekEnd } = useWeekCalculation(selectedDate);
   const weekStartDateParam = formatDateOnly(weekStart);
   const weekDisplay = formatWeekDisplay(weekStart, weekEnd);
+
+  useEffect(
+    () => () => {
+      boardGeneration.current += 1;
+      activeMutationId.current = null;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (statusMessagePhase === "blinking") {
@@ -108,7 +131,7 @@ export function BoardPage() {
   }, [statusMessagePhase]);
 
   useEffect(() => {
-    if (!activeTaskMenuId && !pendingMove) {
+    if (!activeTaskMenuId && !pendingMove && !draggedTask) {
       return undefined;
     }
 
@@ -129,14 +152,20 @@ export function BoardPage() {
         pendingMove &&
         !target.closest(".week-nav, .pending-move-flow, [data-move-here]")
       ) {
-        setPendingMove(null);
+        cancelPendingMove(false);
       }
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        if (pendingMove) {
+          cancelPendingMove();
+        } else if (draggedTask) {
+          cancelDrag(draggedTask.taskId);
+        } else if (activeTaskMenuId) {
+          focusTask(activeTaskMenuId);
+        }
         setActiveTaskMenuId(null);
-        setPendingMove(null);
       }
     }
 
@@ -146,7 +175,7 @@ export function BoardPage() {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [activeTaskMenuId, pendingMove]);
+  });
 
   useEffect(() => {
     if (!token) {
@@ -155,18 +184,20 @@ export function BoardPage() {
 
     const sessionToken = token;
     let isCurrentRequest = true;
+    const generation = boardGeneration.current;
     const weekStartDate = new Date(`${weekStartDateParam}T00:00:00`);
 
     async function loadBoardWeek() {
       try {
-        const [, weekTasks] = await Promise.all([
+        const [board, weekTasks] = await Promise.all([
           getBoardForWeek(sessionToken, weekStartDate),
           getTasksForWeek(sessionToken, weekStartDate),
         ]);
-        if (!isCurrentRequest) {
+        if (!isCurrentRequest || generation !== boardGeneration.current) {
           return;
         }
         setTasks(weekTasks);
+        setSnapshotVersion(board.snapshotVersion ?? null);
         setLoadedWeekStartDate(weekStartDateParam);
       } catch {
         if (!isCurrentRequest) {
@@ -184,6 +215,7 @@ export function BoardPage() {
   }, [token, weekStartDateParam]);
 
   function handlePreviousWeek() {
+    invalidateBoardRequests();
     // Functional updates ensure rapid clicks apply in order without stale state.
     setSelectedDate((current) => shiftDateByDays(current, -7));
   }
@@ -192,23 +224,142 @@ export function BoardPage() {
   const disableTaskActions =
     isEditorOpen ||
     isSaving ||
-    isMoving ||
+    boardMutation !== null ||
     pendingMove !== null ||
     pendingStatusTaskIds.size > 0 ||
-    pendingDeleteTaskIds.size > 0 ||
-    pendingReorderLane !== null;
+    pendingDeleteTaskIds.size > 0;
   const taskAccessiblePositions = new Map(
     visibleTasks.map((task, index) => [task.id, index + 1]),
   );
 
   function handleNextWeek() {
+    invalidateBoardRequests();
     // Functional updates ensure rapid clicks apply in order without stale state.
     setSelectedDate((current) => shiftDateByDays(current, 7));
   }
 
   function handleCurrentWeek() {
+    // A no-op navigation must not invalidate an in-flight mutation/load.
+    if (
+      formatDateOnly(getWeekRange(new Date()).weekStart) === weekStartDateParam
+    ) {
+      return;
+    }
+    invalidateBoardRequests();
     // Return to the actual current week.
     setSelectedDate(new Date());
+  }
+
+  function invalidateBoardRequests() {
+    boardGeneration.current += 1;
+    activeMutationId.current = null;
+    setBoardMutation(null);
+    setSnapshotVersion(null);
+    setDraggedTask(null);
+    setDropTarget(null);
+    setSaveMessage(null);
+  }
+
+  function beginMutation(kind: BoardMutation["kind"]) {
+    if (activeMutationId.current !== null) {
+      return null;
+    }
+    const id = ++boardGeneration.current;
+    activeMutationId.current = id;
+    setBoardMutation({ id, kind, phase: "pending" });
+    return id;
+  }
+
+  function isCurrentMutation(id: number) {
+    return activeMutationId.current === id && boardGeneration.current === id;
+  }
+
+  function focusTask(
+    taskId: string,
+    laneKey?: string,
+    generation = boardGeneration.current,
+  ) {
+    window.requestAnimationFrame(() => {
+      if (generation !== boardGeneration.current) {
+        return;
+      }
+      const task = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-task-reorder-id]"),
+      ).find((element) => element.dataset.taskReorderId === taskId);
+      const lane = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-lane-key]"),
+      ).find((element) => element.dataset.laneKey === laneKey);
+      (
+        task ??
+        lane ??
+        document.querySelector<HTMLElement>(".week-nav button")
+      )?.focus();
+    });
+  }
+
+  function finishMutation(id: number, taskId: string, laneKey?: string) {
+    if (!isCurrentMutation(id)) {
+      return;
+    }
+    activeMutationId.current = null;
+    setBoardMutation(null);
+    setPendingMove(null);
+    focusTask(taskId, laneKey, id);
+  }
+
+  function cancelPendingMove(restoreFocus = true) {
+    if (!pendingMove) return;
+    const move = pendingMove;
+    setPendingMove(null);
+    setSaveMessage(`Move canceled for “${move.title}”.`);
+    setStatusMessagePhase(null);
+    if (restoreFocus) focusTask(move.taskId, getLaneKey(move.sourceDayDate));
+  }
+
+  function cancelDrag(taskId: string) {
+    setDraggedTask(null);
+    setDropTarget(null);
+    setSaveMessage("Drag canceled. The task has not moved.");
+    setStatusMessagePhase(null);
+    focusTask(taskId);
+  }
+
+  async function reconcileMutation(
+    id: number,
+    error: unknown,
+    fallback: TaskPayload[],
+  ) {
+    if (!token || !isCurrentMutation(id)) return;
+    setBoardMutation((current) =>
+      current ? { ...current, phase: "reconciling" } : current,
+    );
+    let refreshed = false;
+    try {
+      const [board, authoritativeTasks] = await Promise.all([
+        getBoardForWeek(token, weekStart),
+        getTasksForWeek(token, weekStart),
+      ]);
+      if (!isCurrentMutation(id)) return;
+      setTasks(authoritativeTasks);
+      setLoadedWeekStartDate(weekStartDateParam);
+      setSnapshotVersion(board.snapshotVersion ?? null);
+      refreshed = true;
+    } catch {
+      if (!isCurrentMutation(id)) return;
+      setTasks(fallback);
+      setSnapshotVersion(null);
+    }
+    if (!isCurrentMutation(id)) return;
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Could not update the task order.";
+    const conflict =
+      error instanceof BoardMutationError && error.status === 409;
+    setSaveMessage(
+      `${conflict ? "The board changed. " : ""}${message} ${refreshed ? "The latest board has been loaded." : "Reload the board before trying again."}`,
+    );
+    setStatusMessagePhase(null);
   }
 
   function getDotNetUtcTicks(value: string): string {
@@ -249,15 +400,7 @@ export function BoardPage() {
       snapshotContent += `|${task.id}|${task.dayDate ?? "shared"}|${task.orderIndex ?? 0}|${task.title}|${task.notes ?? ""}|${task.status}|${task.executionTime}|${getDotNetUtcTicks(task.updatedAtUtc)}`;
     }
 
-    const hashBuffer = await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(snapshotContent),
-    );
-    return Array.from(new Uint8Array(hashBuffer), (byte) =>
-      byte.toString(16).padStart(2, "0"),
-    )
-      .join("")
-      .toUpperCase();
+    return sha256(snapshotContent).toUpperCase();
   }
 
   async function handleMoveTask(
@@ -275,7 +418,9 @@ export function BoardPage() {
     const sourceWeekStartDate = sourceWeekStartDateValue;
     const sourceWeekDate = new Date(`${sourceWeekStartDate}T00:00:00`);
     const destinationWeekStartDate = destinationWeekStartDateValue;
-    setIsMoving(true);
+    const operationId = beginMutation("move");
+    if (operationId === null) return;
+    const previousTasks = tasks;
 
     try {
       const sourceTasks = await getTasksForWeek(token, sourceWeekDate);
@@ -287,7 +432,16 @@ export function BoardPage() {
         (task) => task.id === taskId,
       );
       if (sourceIndex < 0) {
-        setPendingMove(null);
+        if (isCurrentMutation(operationId)) {
+          setSaveMessage(
+            "The board changed. The task is no longer in its source lane.",
+          );
+          await reconcileMutation(
+            operationId,
+            new Error("The task is no longer in its source lane."),
+            previousTasks,
+          );
+        }
         return;
       }
 
@@ -316,6 +470,8 @@ export function BoardPage() {
               destinationTasks,
             );
 
+      if (!isCurrentMutation(operationId)) return;
+
       const response = await moveTask(token, taskId, {
         sourceWeekStartDate,
         sourceDayDate,
@@ -327,33 +483,28 @@ export function BoardPage() {
         destinationSnapshotVersion,
       });
 
+      if (!isCurrentMutation(operationId)) return;
+
+      setLoadedWeekStartDate(weekStartDateParam);
       if (destinationWeekStartDate === weekStartDateParam) {
         setTasks(response.destination.tasks);
+        setSnapshotVersion(response.destination.snapshotVersion);
       } else if (sourceWeekStartDate === weekStartDateParam) {
         setTasks(response.source.tasks);
+        setSnapshotVersion(response.source.snapshotVersion);
       } else {
         const refreshedTasks = await getTasksForWeek(token, weekStart);
+        if (!isCurrentMutation(operationId)) return;
         setTasks(refreshedTasks);
+        setSnapshotVersion(null);
       }
 
       setSaveMessage("Task moved.");
       setStatusMessagePhase(null);
     } catch (error) {
-      try {
-        const authoritativeTasks = await getTasksForWeek(token, weekStart);
-        setTasks(authoritativeTasks);
-      } catch {
-        // Keep the current board until the next successful week load.
-      }
-      setSaveMessage(
-        error instanceof Error
-          ? error.message
-          : "Could not move the task. Please try again.",
-      );
-      setStatusMessagePhase(null);
+      await reconcileMutation(operationId, error, previousTasks);
     } finally {
-      setPendingMove(null);
-      setIsMoving(false);
+      finishMutation(operationId, taskId, getLaneKey(destinationDayDate));
     }
   }
 
@@ -364,6 +515,13 @@ export function BoardPage() {
       title: task.title,
       sourceWeekStartDate: weekStartDateParam,
       sourceDayDate,
+    });
+    setSaveMessage(null);
+    const generation = boardGeneration.current;
+    window.requestAnimationFrame(() => {
+      if (generation === boardGeneration.current) {
+        document.querySelector<HTMLElement>("[data-move-here]")?.focus();
+      }
     });
   }
 
@@ -403,6 +561,8 @@ export function BoardPage() {
     destinationDayDate: string | null,
     destinationIndex: number,
   ) {
+    dragWasDropped.current = true;
+    setDropTarget(null);
     const sourceDayDate = sourceLaneKey === "shared" ? null : sourceLaneKey;
     void handleMoveTask(
       taskId,
@@ -431,7 +591,6 @@ export function BoardPage() {
       return;
     }
 
-    const previousLaneTasks = orderedLaneTasks;
     const nextLaneTasks = [...orderedLaneTasks];
     const [movedTask] = nextLaneTasks.splice(sourceIndex, 1);
     nextLaneTasks.splice(targetIndex, 0, movedTask);
@@ -441,43 +600,73 @@ export function BoardPage() {
       orderIndex: index,
     }));
 
-    setPendingReorderLane(laneKey);
-    setTasks((currentTasks) =>
-      replaceLaneTasks(currentTasks, dayDate, optimisticLaneTasks),
-    );
+    const operationId = beginMutation("reorder");
+    if (operationId === null) return;
+    const previousTasks = tasks;
     setDropTarget(null);
 
     try {
+      const version =
+        snapshotVersion ??
+        (await getWeekSnapshotVersion(weekStartDateParam, previousTasks));
+      if (!isCurrentMutation(operationId)) return;
+      setTasks((currentTasks) =>
+        replaceLaneTasks(currentTasks, dayDate, optimisticLaneTasks),
+      );
       const response = await reorderTasks(token, {
         weekStartDate: weekStartDateParam,
         dayDate,
         taskIds: optimisticLaneTasks.map((task) => task.id),
+        snapshotVersion: version,
       });
-      setTasks((currentTasks) =>
-        replaceLaneTasks(currentTasks, dayDate, response.tasks),
+      if (!isCurrentMutation(operationId)) return;
+      const nextTasks = replaceLaneTasks(
+        previousTasks,
+        dayDate,
+        response.tasks,
       );
+      const nextVersion = await getWeekSnapshotVersion(
+        weekStartDateParam,
+        nextTasks,
+      );
+      if (!isCurrentMutation(operationId)) return;
+      setTasks(nextTasks);
+      setLoadedWeekStartDate(weekStartDateParam);
+      setSnapshotVersion(nextVersion);
       setSaveMessage("Task order updated.");
       setStatusMessagePhase(null);
     } catch (error) {
-      setTasks((currentTasks) =>
-        replaceLaneTasks(currentTasks, dayDate, previousLaneTasks),
-      );
-      setSaveMessage(
-        error instanceof Error
-          ? error.message
-          : "Could not reorder tasks. Reload the lane and try again.",
-      );
-      setStatusMessagePhase(null);
+      await reconcileMutation(operationId, error, previousTasks);
     } finally {
-      setPendingReorderLane(null);
-      window.requestAnimationFrame(() => {
-        document
-          .querySelector<HTMLElement>(
-            `[data-task-reorder-id="${sourceTaskId}"]`,
-          )
-          ?.focus();
-      });
+      finishMutation(operationId, sourceTaskId, laneKey);
     }
+  }
+
+  function updateLaneDropTarget(
+    event: React.DragEvent<HTMLElement>,
+    dayDate: string | null,
+  ) {
+    if (!draggedTask) return;
+    const laneKey = getLaneKey(dayDate);
+    const valid = !disableTaskActions && draggedTask.laneKey !== laneKey;
+    if (valid) event.preventDefault();
+    setDropTarget({
+      laneKey,
+      taskId: null,
+      valid,
+      message: valid
+        ? "Drop here at the end of this lane."
+        : "Cannot drop here. Choose a task to reorder within this lane.",
+    });
+  }
+
+  function rejectDrop(taskId: string, message: string) {
+    dragWasDropped.current = true;
+    setDraggedTask(null);
+    setDropTarget(null);
+    setSaveMessage(message);
+    setStatusMessagePhase(null);
+    focusTask(taskId);
   }
 
   function openTaskEditor(dayDate: Date | null, task?: TaskPayload) {
@@ -522,6 +711,7 @@ export function BoardPage() {
         const result = await createRecurringTasks(token, input);
         const refreshedTasks = await getTasksForWeek(token, weekStart);
         setTasks(refreshedTasks);
+        setSnapshotVersion(null);
         closeTaskEditor();
         setSaveMessage(`${result.createdCount} tasks created.`);
         setStatusMessagePhase(null);
@@ -532,6 +722,7 @@ export function BoardPage() {
 
       const refreshedTasks = await getTasksForWeek(token, weekStart);
       setTasks(refreshedTasks);
+      setSnapshotVersion(null);
       closeTaskEditor();
       setSaveMessage(editorTask ? "Task updated." : "Task created.");
       setStatusMessagePhase(null);
@@ -552,7 +743,7 @@ export function BoardPage() {
     const nextStatus = getNextTaskStatus(task.status);
     setPendingStatusTaskIds((current) => new Set(current).add(task.id));
     try {
-      await updateTask(token, task.id, {
+      const updatedTask = await updateTask(token, task.id, {
         weekStartDate: weekStartDateParam,
         title: task.title,
         dayDate: task.dayDate,
@@ -563,10 +754,11 @@ export function BoardPage() {
       setTasks((currentTasks) =>
         currentTasks.map((currentTask) =>
           currentTask.id === task.id
-            ? { ...currentTask, status: nextStatus }
+            ? { ...currentTask, ...updatedTask, status: nextStatus }
             : currentTask,
         ),
       );
+      setSnapshotVersion(null);
       setSaveMessage(
         nextStatus === "Completed"
           ? "Task completed."
@@ -599,14 +791,26 @@ export function BoardPage() {
     }
 
     setPendingDeleteTaskIds((current) => new Set(current).add(task.id));
+    const generation = boardGeneration.current;
     try {
       await deleteTask(token, task.id, weekStartDateParam);
+      if (generation !== boardGeneration.current) return;
       setTasks((currentTasks) =>
         currentTasks.filter((currentTask) => currentTask.id !== task.id),
       );
+      setSnapshotVersion(null);
+      // Deletion compacts sibling indexes on the server; reload before the next reorder.
+      const [board, authoritativeTasks] = await Promise.all([
+        getBoardForWeek(token, weekStart),
+        getTasksForWeek(token, weekStart),
+      ]);
+      if (generation !== boardGeneration.current) return;
+      setTasks(authoritativeTasks);
+      setSnapshotVersion(board.snapshotVersion ?? null);
       setSaveMessage("Task deleted.");
       setStatusMessagePhase(null);
     } catch (error) {
+      if (generation !== boardGeneration.current) return;
       setSaveMessage(
         error instanceof Error
           ? error.message
@@ -627,6 +831,7 @@ export function BoardPage() {
     if (!confirmed) {
       return;
     }
+    invalidateBoardRequests();
 
     logout();
     navigate("/login", { replace: true });
@@ -703,7 +908,7 @@ export function BoardPage() {
             type="button"
             className="cancel-move-button"
             aria-label="Cancel move"
-            onClick={() => setPendingMove(null)}
+            onClick={() => cancelPendingMove()}
           >
             Cancel
           </button>
@@ -715,16 +920,27 @@ export function BoardPage() {
         weekEnd={weekEnd}
         viewMode={viewMode}
         taskActionsDisabled={disableTaskActions}
-        onAddTask={(dayDate) => openTaskEditor(dayDate)}
-        onWeekLaneDragOver={(event) => {
-          if (!draggedTask || draggedTask.laneKey === "shared") {
-            return;
+        laneDropFeedback={dropTarget?.taskId === null ? dropTarget : undefined}
+        onLaneDragLeave={(event) => {
+          if (
+            !(event.relatedTarget instanceof Node) ||
+            !event.currentTarget.contains(event.relatedTarget)
+          ) {
+            setDropTarget(null);
           }
-          event.preventDefault();
         }}
+        onAddTask={(dayDate) => openTaskEditor(dayDate)}
+        onWeekLaneDragOver={(event) => updateLaneDropTarget(event, null)}
         onWeekLaneDrop={(event) => {
           event.preventDefault();
-          if (!draggedTask || draggedTask.laneKey === "shared") {
+          if (!draggedTask) return;
+          dragWasDropped.current = true;
+          setDropTarget(null);
+          if (draggedTask.laneKey === "shared" || disableTaskActions) {
+            rejectDrop(
+              draggedTask.taskId,
+              "Cannot drop here. The task remains in its previous position.",
+            );
             return;
           }
           const sourceDayDate = draggedTask.laneKey;
@@ -745,20 +961,21 @@ export function BoardPage() {
         onWeekLaneMoveHere={
           pendingMove ? () => movePendingTaskHere(null) : undefined
         }
-        onDayLaneDragOver={(event) => {
-          if (!draggedTask) {
-            return;
-          }
-          event.preventDefault();
-        }}
+        onDayLaneDragOver={updateLaneDropTarget}
         onDayLaneDrop={(event, dayDate) => {
           event.preventDefault();
           if (!draggedTask) {
             return;
           }
+          dragWasDropped.current = true;
+          setDropTarget(null);
           const sourceDayDate =
             draggedTask.laneKey === "shared" ? null : draggedTask.laneKey;
-          if (sourceDayDate === dayDate) {
+          if (sourceDayDate === dayDate || disableTaskActions) {
+            rejectDrop(
+              draggedTask.taskId,
+              "Cannot drop here. The task remains in its previous position.",
+            );
             return;
           }
           const destinationIndex = sortTasks(
@@ -784,7 +1001,10 @@ export function BoardPage() {
           handleTaskReorder,
           handleCrossLaneDrop,
           draggedTask,
-          setDraggedTask,
+          (value) => {
+            if (value) dragWasDropped.current = false;
+            setDraggedTask(value);
+          },
           dropTarget,
           setDropTarget,
           pendingStatusTaskIds,
@@ -794,6 +1014,13 @@ export function BoardPage() {
           activeTaskMenuId,
           setActiveTaskMenuId,
           (task) => beginPendingMove(task, null),
+          rejectDrop,
+          (taskId) => {
+            if (!dragWasDropped.current) cancelDrag(taskId);
+          },
+          () => {
+            dragWasDropped.current = true;
+          },
         )}
         dayContent={Array.from({ length: 7 }, (_, dayIndex) => {
           const dayDate = formatDateOnly(shiftDateByDays(weekStart, dayIndex));
@@ -807,7 +1034,10 @@ export function BoardPage() {
             handleTaskReorder,
             handleCrossLaneDrop,
             draggedTask,
-            setDraggedTask,
+            (value) => {
+              if (value) dragWasDropped.current = false;
+              setDraggedTask(value);
+            },
             dropTarget,
             setDropTarget,
             pendingStatusTaskIds,
@@ -817,6 +1047,13 @@ export function BoardPage() {
             activeTaskMenuId,
             setActiveTaskMenuId,
             (task) => beginPendingMove(task, dayDate),
+            rejectDrop,
+            (taskId) => {
+              if (!dragWasDropped.current) cancelDrag(taskId);
+            },
+            () => {
+              dragWasDropped.current = true;
+            },
           );
         })}
       />
@@ -857,8 +1094,8 @@ function renderTasks(
   ) => void,
   draggedTask: { taskId: string; laneKey: string } | null,
   setDraggedTask: (value: { taskId: string; laneKey: string } | null) => void,
-  dropTarget: { laneKey: string; taskId: string } | null,
-  setDropTarget: (value: { laneKey: string; taskId: string } | null) => void,
+  dropTarget: DropTarget | null,
+  setDropTarget: (value: DropTarget | null) => void,
   pendingStatusTaskIds: ReadonlySet<string>,
   pendingDeleteTaskIds: ReadonlySet<string>,
   taskAccessiblePositions: ReadonlyMap<string, number>,
@@ -866,6 +1103,9 @@ function renderTasks(
   activeTaskMenuId: string | null,
   setActiveTaskMenuId: (taskId: string | null) => void,
   onRequestMove: (task: TaskPayload) => void,
+  onInvalidDrop: (taskId: string, message: string) => void,
+  onDragCancel: (taskId: string) => void,
+  onDropHandled: () => void,
 ) {
   if (tasks.length === 0) {
     return undefined;
@@ -886,25 +1126,55 @@ function renderTasks(
     return (
       <div
         key={task.id}
-        className={`task-item${isCompleted ? " task-item-completed" : ""}${isNotDone ? " task-item-not-done" : ""}${isDropTarget ? " task-item-drop-target" : ""}`}
+        data-task-reorder-id={task.id}
+        tabIndex={-1}
+        data-drop-state={
+          isDropTarget ? (dropTarget.valid ? "valid" : "invalid") : undefined
+        }
+        aria-describedby={isDropTarget ? `drop-task-${task.id}` : undefined}
+        className={`task-item${isCompleted ? " task-item-completed" : ""}${isNotDone ? " task-item-not-done" : ""}${isDropTarget ? (dropTarget.valid ? " task-item-drop-target" : " task-item-drop-invalid") : ""}`}
         aria-busy={isUpdatingStatus || isDeleting}
         draggable={!disableTaskActions}
         onDragStart={() => setDraggedTask({ taskId: task.id, laneKey })}
         onDragEnd={() => {
+          onDragCancel(task.id);
           setDraggedTask(null);
           setDropTarget(null);
         }}
         onDragOver={(event) => {
-          if (!draggedTask || draggedTask.taskId === task.id) {
-            return;
-          }
-          event.preventDefault();
-          setDropTarget({ laneKey, taskId: task.id });
+          if (!draggedTask) return;
+          event.stopPropagation();
+          const sourceIndex = tasks.findIndex(
+            (candidate) => candidate.id === draggedTask.taskId,
+          );
+          const targetIndex =
+            sourceIndex < taskIndex ? taskIndex - 1 : taskIndex;
+          const valid =
+            !disableTaskActions &&
+            draggedTask.taskId !== task.id &&
+            (draggedTask.laneKey !== laneKey ||
+              (sourceIndex >= 0 && sourceIndex !== targetIndex));
+          if (valid) event.preventDefault();
+          setDropTarget({
+            laneKey,
+            taskId: task.id,
+            valid,
+            message: valid
+              ? `Drop here before “${task.title}”.`
+              : "Cannot drop here. The task is already in this position.",
+          });
         }}
         onDrop={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          if (!draggedTask || draggedTask.taskId === task.id) {
+          if (!draggedTask) return;
+          onDropHandled();
+          setDropTarget(null);
+          if (disableTaskActions || draggedTask.taskId === task.id) {
+            onInvalidDrop(
+              draggedTask.taskId,
+              "Cannot drop here. The task remains in its previous position.",
+            );
             return;
           }
           if (draggedTask.laneKey !== laneKey) {
@@ -921,13 +1191,27 @@ function renderTasks(
           );
           const targetIndex =
             sourceIndex < taskIndex ? taskIndex - 1 : taskIndex;
+          if (sourceIndex < 0 || sourceIndex === targetIndex) {
+            onInvalidDrop(
+              draggedTask.taskId,
+              "The task is already in this position.",
+            );
+            return;
+          }
           setDraggedTask(null);
           void onReorder(tasks, dayDate, draggedTask.taskId, targetIndex);
         }}
       >
         <div className="task-content">
           {isDropTarget ? (
-            <span className="task-drop-indicator">Drop here</span>
+            <span
+              id={`drop-task-${task.id}`}
+              role="status"
+              aria-live="polite"
+              className={`task-drop-indicator${dropTarget.valid ? "" : " task-drop-indicator-invalid"}`}
+            >
+              {dropTarget.message}
+            </span>
           ) : null}
           <div className="task-title-row">
             {task.dayDate !== null && task.executionTime ? (

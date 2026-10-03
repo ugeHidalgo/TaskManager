@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
+import type { DropZoneFeedback } from "./WeekLayout";
 
 export interface WeekSectionProps {
   /** Week start date (Monday) */
@@ -11,6 +12,8 @@ export interface WeekSectionProps {
   onAddTask?: () => void;
   onLaneDragOver?: (event: React.DragEvent<HTMLElement>) => void;
   onLaneDrop?: (event: React.DragEvent<HTMLElement>) => void;
+  dropFeedback?: DropZoneFeedback;
+  onLaneDragLeave?: (event: React.DragEvent<HTMLElement>) => void;
   onMoveHere?: () => void;
 }
 
@@ -24,16 +27,26 @@ export function WeekSection({
   onAddTask,
   onLaneDragOver,
   onLaneDrop,
+  dropFeedback,
+  onLaneDragLeave,
   onMoveHere,
 }: WeekSectionProps) {
+  const feedbackId = `week-section-drop-feedback-${useId()}`;
   const headingId = "week-section-title";
 
   return (
     <section
-      className="week-section"
+      className={`week-section${dropFeedback ? ` drop-zone-${dropFeedback.valid ? "valid" : "invalid"}` : ""}`}
+      data-lane-key="shared"
+      data-drop-state={
+        dropFeedback ? (dropFeedback.valid ? "valid" : "invalid") : undefined
+      }
+      tabIndex={-1}
       aria-label="Week tasks"
+      aria-describedby={dropFeedback ? feedbackId : undefined}
       onDragOver={onLaneDragOver}
       onDrop={onLaneDrop}
+      onDragLeave={onLaneDragLeave}
     >
       <header className="week-section-header">
         <h2 id={headingId} className="week-section-title">
@@ -66,14 +79,22 @@ export function WeekSection({
         className="week-section-content"
         role="region"
         aria-labelledby={headingId}
-        onDragOver={onLaneDragOver}
-        onDrop={onLaneDrop}
       >
         {children || (
           <div className="empty-state">
             <p className="empty-state-text">No week tasks</p>
           </div>
         )}
+        {dropFeedback ? (
+          <p
+            id={feedbackId}
+            className={`lane-drop-indicator${dropFeedback.valid ? "" : " lane-drop-indicator-invalid"}`}
+            role="status"
+            aria-live="polite"
+          >
+            {dropFeedback.message}
+          </p>
+        ) : null}
       </article>
     </section>
   );

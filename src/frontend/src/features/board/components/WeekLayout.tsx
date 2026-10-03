@@ -3,6 +3,11 @@ import { formatDateOnly } from "../../../api/board";
 import { DayColumn } from "./DayColumn";
 import { WeekSection } from "./WeekSection";
 
+export interface DropZoneFeedback {
+  valid: boolean;
+  message: string;
+}
+
 export interface WeekLayoutProps {
   /** Monday of the current week */
   weekStart: Date;
@@ -16,6 +21,8 @@ export interface WeekLayoutProps {
   viewMode?: BoardViewMode;
   /** Prevent creating/editing tasks while a board mutation is pending */
   taskActionsDisabled?: boolean;
+  laneDropFeedback?: DropZoneFeedback & { laneKey: string };
+  onLaneDragLeave?: (event: React.DragEvent<HTMLElement>) => void;
   onAddTask?: (dayDate: Date | null) => void;
   onWeekLaneDragOver?: (event: React.DragEvent<HTMLElement>) => void;
   onWeekLaneDrop?: (event: React.DragEvent<HTMLElement>) => void;
@@ -49,6 +56,8 @@ export function WeekLayout({
   dayContent,
   viewMode = "workweek",
   taskActionsDisabled = false,
+  laneDropFeedback,
+  onLaneDragLeave,
   onAddTask,
   onWeekLaneDragOver,
   onWeekLaneDrop,
@@ -80,6 +89,10 @@ export function WeekLayout({
         onAddTask={() => onAddTask?.(null)}
         onLaneDragOver={onWeekLaneDragOver}
         onLaneDrop={onWeekLaneDrop}
+        onLaneDragLeave={onLaneDragLeave}
+        dropFeedback={
+          laneDropFeedback?.laneKey === "shared" ? laneDropFeedback : undefined
+        }
         onMoveHere={onWeekLaneMoveHere}
       >
         {weekContent}
@@ -98,6 +111,12 @@ export function WeekLayout({
               onDayLaneDragOver?.(event, formatDateOnly(date))
             }
             onLaneDrop={(event) => onDayLaneDrop?.(event, formatDateOnly(date))}
+            onLaneDragLeave={onLaneDragLeave}
+            dropFeedback={
+              laneDropFeedback?.laneKey === formatDateOnly(date)
+                ? laneDropFeedback
+                : undefined
+            }
             onMoveHere={
               onDayLaneMoveHere
                 ? () => onDayLaneMoveHere(formatDateOnly(date))

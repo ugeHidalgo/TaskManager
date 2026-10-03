@@ -8,7 +8,20 @@ interface ApiSuccess<T> {
 interface ApiError {
   error?: {
     message?: string;
+    code?: string;
   };
+}
+
+export class BoardMutationError extends Error {
+  readonly status: number;
+  readonly code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "BoardMutationError";
+    this.status = status;
+    this.code = code;
+  }
 }
 
 export interface BoardPayload {
@@ -40,6 +53,7 @@ export interface ReorderTasksInput {
   weekStartDate: string;
   dayDate: string | null;
   taskIds: string[];
+  snapshotVersion?: string;
 }
 
 export interface ReorderedTaskLanePayload {
@@ -183,9 +197,11 @@ async function saveTaskRequest<T>(
 
   if (!response.ok) {
     let message = "Could not save the task.";
+    let code: string | undefined;
 
     try {
       const body = (await response.json()) as ApiError;
+      code = body.error?.code;
       if (body.error?.message) {
         message = body.error.message;
       }
@@ -193,7 +209,7 @@ async function saveTaskRequest<T>(
       // Keep fallback message when response is not JSON.
     }
 
-    throw new Error(message);
+    throw new BoardMutationError(message, response.status, code);
   }
 
   const body = (await response.json()) as ApiSuccess<T>;

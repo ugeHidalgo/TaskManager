@@ -1191,6 +1191,7 @@ describe("BoardPage week navigation", () => {
   it("cancels or confirms permanent task deletion", async () => {
     const user = userEvent.setup();
     const task = makeTask("delete-task", "Task to delete", null, "Not Started");
+    let storedTasks = [task];
     const confirmMock = vi
       .spyOn(window, "confirm")
       .mockReturnValueOnce(false)
@@ -1199,10 +1200,11 @@ describe("BoardPage week navigation", () => {
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (input, init) => {
         if (init?.method === "DELETE") {
+          storedTasks = [];
           return new Response(null, { status: 204 });
         }
 
-        return buildBoardResponseFromUrl(String(input), [task]);
+        return buildBoardResponseFromUrl(String(input), storedTasks);
       });
 
     render(

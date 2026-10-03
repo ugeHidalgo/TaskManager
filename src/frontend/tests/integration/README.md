@@ -1,4 +1,4 @@
-# Recurring task integration regression
+# Real-stack integration regressions
 
 This suite uses a real Chromium browser, frontend, authenticated API and PostgreSQL. It does not mock task creation or change production behavior.
 
@@ -20,3 +20,9 @@ This suite uses a real Chromium browser, frontend, authenticated API and Postgre
 Each run uses a unique title marker and deletes only tasks created with that marker, including when assertions fail. It never deletes an unrelated batch returned by the bug. Empty week workspaces may remain; the test does not delete shared board data. A database containing an earlier colliding batch can reproduce the defect on the first submission, before the reload step.
 
 The `.integration.ts` suffix is intentionally selected by Playwright and excluded from Vitest's default `.test`/`.spec` discovery. Generated reports are ignored by Git.
+
+## Stable order and visual feedback (US3.3)
+
+`stable-order-feedback.integration.ts` creates three uniquely marked tasks in the week two weeks ahead, only if that week is empty. It verifies authoritative snapshot conflicts (409 without persisted changes), real pointer reorder and deterministic indexes, empty-lane markers, drag cancellation/focus, the keyboard-operable Move here flow, completed-task execution-time preservation and actual reduced-motion CSS. Keyboard reordering within a lane is deliberately not part of the story.
+
+The test skips rather than changes ordering of pre-existing tasks when the selected week is occupied. Cleanup attempts to delete only its own created IDs. Empty board workspaces may remain. Rebuild both frontend and backend before running this integration after changes to the reorder contract.

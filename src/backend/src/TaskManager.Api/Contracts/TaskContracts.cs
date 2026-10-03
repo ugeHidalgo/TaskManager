@@ -32,7 +32,8 @@ public sealed record UpdateTaskRequest(
 public sealed record ReorderTasksRequest(
     DateOnly WeekStartDate,
     DateOnly? DayDate,
-    IReadOnlyList<Guid> TaskIds);
+    IReadOnlyList<Guid> TaskIds,
+    string? SnapshotVersion = null);
 
 public sealed record ReorderedTaskLaneResponse(
     DateOnly WeekStartDate,

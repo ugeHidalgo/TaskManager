@@ -104,8 +104,10 @@ public sealed class TaskApiTests
         Assert.Equal(new[] { 0, 1 }, remainingTasks.Select(task => task.OrderIndex));
     }
 
-    [Fact]
-    public async Task ReorderTasksAsync_PersistsSubmittedOrderAndPreservesTaskData()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReorderTasksAsync_PersistsSubmittedOrderAndPreservesTaskData(bool supplySnapshotVersion)
     {
         var weekStartDate = new DateOnly(2026, 8, 17);
         var dayDate = new DateOnly(2026, 8, 19);
@@ -127,9 +129,17 @@ public sealed class TaskApiTests
         var originalFirstUpdatedAt = first.UpdatedAtUtc;
         var originalSecondUpdatedAt = second.UpdatedAtUtc;
 
+        context.Request.QueryString = new QueryString("?week_start_date=2026-08-17");
+        var boardResponse = ToResponse(await facade.GetBoardAsync(context, dbContext, CancellationToken.None));
+        var snapshotVersion = boardResponse.Body.RootElement.GetProperty("Data")
+            .GetProperty("snapshotVersion").GetString();
+        var request = supplySnapshotVersion
+            ? new ReorderTasksRequest(weekStartDate, dayDate, [second.Id, first.Id], snapshotVersion)
+            : new ReorderTasksRequest(weekStartDate, dayDate, [second.Id, first.Id]);
+
         var result = await facade.ReorderTasksAsync(
             context,
-            new ReorderTasksRequest(weekStartDate, dayDate, [second.Id, first.Id]),
+            request,
             dbContext,
             CancellationToken.None);
         var response = ToResponse(result);
@@ -152,6 +162,65 @@ public sealed class TaskApiTests
             .OrderBy(task => task.OrderIndex)
             .ToListAsync();
         Assert.Equal(new[] { second.Id, first.Id }, persistedTasks.Select(task => task.Id));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReorderTasksAsync_RejectsStaleSnapshotWithSameIdsWithoutChangingTaskData(bool submitCurrentOrder)
+    {
+        var weekStartDate = new DateOnly(2026, 8, 17);
+        var dayDate = weekStartDate.AddDays(2);
+        var context = CreateContext();
+        context.Request.QueryString = new QueryString("?week_start_date=2026-08-17");
+        var options = new DbContextOptionsBuilder<TaskManagerDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        await using var dbContext = new TaskManagerDbContext(options);
+        var workspace = TaskManager.Domain.Board.WeekWorkspace.Create(weekStartDate);
+        var first = TaskManager.Domain.Board.TaskItem.Create(
+            workspace.Id, weekStartDate, "First", dayDate, "Keep first", "Completed", "08:30");
+        var second = TaskManager.Domain.Board.TaskItem.Create(
+            workspace.Id, weekStartDate, "Second", dayDate, "Keep second", "In Progress", "09:30");
+        first.SetOrderIndex(0);
+        second.SetOrderIndex(1);
+        dbContext.WeekWorkspaces.Add(workspace);
+        dbContext.Tasks.AddRange(first, second);
+        await dbContext.SaveChangesAsync();
+
+        var boardResponse = ToResponse(await facade.GetBoardAsync(context, dbContext, CancellationToken.None));
+        var staleSnapshotVersion = boardResponse.Body.RootElement.GetProperty("Data")
+            .GetProperty("snapshotVersion").GetString();
+        var concurrentResult = await facade.ReorderTasksAsync(
+            context,
+            new ReorderTasksRequest(weekStartDate, dayDate, [second.Id, first.Id]),
+            dbContext,
+            CancellationToken.None);
+        Assert.Equal(StatusCodes.Status200OK, ToResponse(concurrentResult).StatusCode);
+        var before = JsonSerializer.Serialize(await dbContext.Tasks.AsNoTracking()
+            .OrderBy(task => task.Id).ToListAsync());
+
+        var result = await facade.ReorderTasksAsync(
+            context,
+            new ReorderTasksRequest(
+                weekStartDate,
+                dayDate,
+                submitCurrentOrder ? [second.Id, first.Id] : [first.Id, second.Id],
+                staleSnapshotVersion),
+            dbContext,
+            CancellationToken.None);
+        var response = ToResponse(result);
+
+        Assert.Equal(StatusCodes.Status409Conflict, response.StatusCode);
+        Assert.Equal("task.order.conflict", response.Body.RootElement
+            .GetProperty("Error").GetProperty("Code").GetString());
+        Assert.Equal("The board changed. Reload and try again.", response.Body.RootElement
+            .GetProperty("Error").GetProperty("Message").GetString());
+        await using var reloadContext = new TaskManagerDbContext(options);
+        Assert.Equal(before, JsonSerializer.Serialize(await reloadContext.Tasks.AsNoTracking()
+            .OrderBy(task => task.Id).ToListAsync()));
+        Assert.Equal(new[] { second.Id, first.Id }, await reloadContext.Tasks
+            .OrderBy(task => task.OrderIndex).Select(task => task.Id).ToArrayAsync());
     }
 
     [Theory]

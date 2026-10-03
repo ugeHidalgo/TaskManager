@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { formatDateOnly } from "../../../api/board";
+import type { DropZoneFeedback } from "./WeekLayout";
 
 export interface DayColumnProps {
   /** The date for this day */
@@ -15,6 +16,8 @@ export interface DayColumnProps {
     dayDate: string,
   ) => void;
   onLaneDrop?: (event: React.DragEvent<HTMLElement>, dayDate: string) => void;
+  dropFeedback?: DropZoneFeedback;
+  onLaneDragLeave?: (event: React.DragEvent<HTMLElement>) => void;
   onMoveHere?: () => void;
 }
 
@@ -30,8 +33,11 @@ export function DayColumn({
   onAddTask,
   onLaneDragOver,
   onLaneDrop,
+  dropFeedback,
+  onLaneDragLeave,
   onMoveHere,
 }: DayColumnProps) {
+  const feedbackId = `day-column-drop-feedback-${useId()}`;
   const formattedDate = formatDate(date);
   const isoDate = formatDateOnly(date);
   const dayKey = `${dayName.toLowerCase()}-${isoDate}`;
@@ -40,10 +46,17 @@ export function DayColumn({
 
   return (
     <section
-      className="day-column"
+      className={`day-column${dropFeedback ? ` drop-zone-${dropFeedback.valid ? "valid" : "invalid"}` : ""}`}
+      data-lane-key={isoDate}
+      data-drop-state={
+        dropFeedback ? (dropFeedback.valid ? "valid" : "invalid") : undefined
+      }
+      tabIndex={-1}
       aria-label={`${dayName} ${formattedDate}`}
+      aria-describedby={dropFeedback ? feedbackId : undefined}
       onDragOver={(event) => onLaneDragOver?.(event, isoDate)}
       onDrop={(event) => onLaneDrop?.(event, isoDate)}
+      onDragLeave={onLaneDragLeave}
     >
       <header className="day-column-header">
         <h3 id={headingId} className="day-column-title">
@@ -78,14 +91,22 @@ export function DayColumn({
         className="day-column-content"
         role="region"
         aria-labelledby={headingId}
-        onDragOver={(event) => onLaneDragOver?.(event, isoDate)}
-        onDrop={(event) => onLaneDrop?.(event, isoDate)}
       >
         {children || (
           <div className="empty-state">
             <p className="empty-state-text">No tasks for {dayName}</p>
           </div>
         )}
+        {dropFeedback ? (
+          <p
+            id={feedbackId}
+            className={`lane-drop-indicator${dropFeedback.valid ? "" : " lane-drop-indicator-invalid"}`}
+            role="status"
+            aria-live="polite"
+          >
+            {dropFeedback.message}
+          </p>
+        ) : null}
       </article>
     </section>
   );
