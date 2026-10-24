@@ -89,6 +89,14 @@ public sealed class TaskItem
         UpdatedAtUtc = DateTime.UtcNow;
     }
 
+    public void AssignBatchId(string batchId)
+    {
+        var normalizedBatchId = NormalizeBatchId(batchId)
+            ?? throw new ArgumentException("Batch id is required.", nameof(batchId));
+        BatchId = normalizedBatchId;
+        UpdatedAtUtc = DateTime.UtcNow;
+    }
+
     public void SetOrderIndex(int orderIndex)
     {
         if (orderIndex < 0)
@@ -204,8 +212,8 @@ public sealed class TaskItem
             return;
         }
 
-        var weekEndDate = weekStartDate.AddDays(6);
-        if (dayDate.Value < weekStartDate || dayDate.Value > weekEndDate)
+        if (dayDate.Value.DayNumber < weekStartDate.DayNumber
+            || dayDate.Value.DayNumber - weekStartDate.DayNumber > 6)
         {
             throw new ArgumentException("Task day must belong to the selected week.", nameof(dayDate));
         }

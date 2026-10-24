@@ -249,6 +249,29 @@ export function createRecurringTasks(
   );
 }
 
+export function convertTaskToRecurring(
+  token: string,
+  taskId: string,
+  input: SaveTaskInput,
+): Promise<RecurringTasksResponse> {
+  const {
+    weekStartDate,
+    startDate,
+    endDate,
+    title,
+    notes,
+    status,
+    executionTime,
+  } = input;
+  return saveTaskRequest<RecurringTasksResponse>(
+    `${apiBaseUrl}/tasks/${encodeURIComponent(taskId)}/recurring`,
+    "POST",
+    token,
+    { weekStartDate, startDate, endDate, title, notes, status, executionTime },
+    input.idempotencyKey,
+  );
+}
+
 export function updateTask(
   token: string,
   taskId: string,

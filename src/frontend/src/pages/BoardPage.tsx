@@ -6,6 +6,7 @@ import {
   BoardMutationError,
   createTask,
   createRecurringTasks,
+  convertTaskToRecurring,
   deleteTask,
   getBoardForWeek,
   getTasksForWeek,
@@ -705,17 +706,23 @@ export function BoardPage() {
     setEditorError(null);
 
     try {
-      if (editorTask) {
-        await updateTask(token, editorTask.id, input);
-      } else if (input.isRecurring) {
-        const result = await createRecurringTasks(token, input);
+      if (input.isRecurring) {
+        const result = editorTask
+          ? await convertTaskToRecurring(token, editorTask.id, input)
+          : await createRecurringTasks(token, input);
         const refreshedTasks = await getTasksForWeek(token, weekStart);
         setTasks(refreshedTasks);
         setSnapshotVersion(null);
         closeTaskEditor();
-        setSaveMessage(`${result.createdCount} tasks created.`);
+        setSaveMessage(
+          editorTask
+            ? `${result.createdCount} tasks in recurring batch.`
+            : `${result.createdCount} tasks created.`,
+        );
         setStatusMessagePhase(null);
         return;
+      } else if (editorTask) {
+        await updateTask(token, editorTask.id, input);
       } else {
         await createTask(token, input);
       }

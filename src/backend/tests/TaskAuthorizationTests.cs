@@ -16,7 +16,7 @@ using Xunit;
 
 namespace TaskManager.Tests;
 
-public sealed class TaskAuthorizationTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed partial class TaskAuthorizationTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly WebApplicationFactory<Program> factory;
 

@@ -16,6 +16,16 @@ public sealed record CreateRecurringTasksRequest(
     string? Status,
     string ExecutionTime);
 
+/// <summary>Converts one task from the selected source week into an inclusive daily batch.</summary>
+public sealed record ConvertTaskToRecurringRequest(
+    DateOnly WeekStartDate,
+    DateOnly StartDate,
+    DateOnly EndDate,
+    string Title,
+    string? Notes,
+    string? Status,
+    string ExecutionTime);
+
 public sealed record RecurringTasksResponse(
     int CreatedCount,
     IReadOnlyList<TaskResponse> Tasks,

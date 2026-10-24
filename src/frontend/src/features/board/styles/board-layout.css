@@ -218,6 +218,7 @@
 .task-content {
   display: grid;
   width: 100%;
+  min-width: 0;
   gap: 0.25rem;
 }
 
@@ -230,9 +231,11 @@
 
 .task-controls-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
   min-height: 2rem;
+  min-width: 0;
 }
 
 .task-drag-handle {

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -200,6 +201,10 @@ public sealed class TaskManagerFacade
                 throw new ArgumentException("Start date must be on or before end date.", nameof(request));
             }
 
+            await using var transaction = dbContext.Database.IsRelational()
+                ? await dbContext.Database.BeginTransactionAsync(cancellationToken)
+                : null;
+            await LockRecurringBatchAsync(dbContext, batchId, cancellationToken);
             var existingTasks = await dbContext.Tasks
                 .Where(task => task.BatchId == batchId)
                 .OrderBy(task => task.DayDate)
@@ -211,9 +216,6 @@ public sealed class TaskManagerFacade
                     httpContext.TraceIdentifier));
             }
 
-            await using var transaction = dbContext.Database.IsRelational()
-                ? await dbContext.Database.BeginTransactionAsync(cancellationToken)
-                : null;
             var generatedTasks = new List<TaskItem>();
             var affectedWeekStartDates = new HashSet<DateOnly>();
             var workspacesByWeek = new Dictionary<DateOnly, WeekWorkspace>();
@@ -264,6 +266,186 @@ public sealed class TaskManagerFacade
                 message: exception.Message,
                 requestId: httpContext.TraceIdentifier));
         }
+    }
+
+    public async Task<IResult> ConvertTaskToRecurringAsync(
+        Guid taskId,
+        HttpContext httpContext,
+        ConvertTaskToRecurringRequest request,
+        TaskManagerDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var batchId = httpContext.Request.Headers["Idempotency-Key"].ToString().Trim();
+        if (batchId.Length is < 1 or > 100)
+        {
+            return Results.BadRequest(ApiErrorResponse.Create(
+                "task.idempotency_key_required",
+                "An idempotency key of 1 to 100 characters is required for task conversion.",
+                httpContext.TraceIdentifier));
+        }
+
+        try
+        {
+            await using var transaction = dbContext.Database.IsRelational()
+                ? await dbContext.Database.BeginTransactionAsync(cancellationToken)
+                : null;
+
+            // Serialize requests sharing a key, including requests for different originals.
+            // The row lock also serializes conversions of the same task with different keys.
+            await LockRecurringBatchAsync(dbContext, batchId, cancellationToken);
+
+            var existingTasks = await dbContext.Tasks
+                .Where(task => task.BatchId == batchId)
+                .OrderBy(task => task.DayDate)
+                .ToListAsync(cancellationToken);
+            if (existingTasks.Count > 0)
+            {
+                if (existingTasks.All(task => task.Id != taskId))
+                {
+                    return Results.Conflict(ApiErrorResponse.Create(
+                        "task.idempotency_key_conflict",
+                        "The idempotency key belongs to another task batch.",
+                        httpContext.TraceIdentifier));
+                }
+
+                return Results.Ok(ApiSuccessResponse<RecurringTasksResponse>.Create(
+                    ToRecurringTasksResponse(existingTasks,
+                        await GetConversionAffectedWeeksAsync(dbContext, existingTasks, request.WeekStartDate, cancellationToken)),
+                    httpContext.TraceIdentifier));
+            }
+
+            var original = dbContext.Database.IsNpgsql()
+                ? await dbContext.Tasks.FromSqlInterpolated($"SELECT * FROM tasks WHERE id = {taskId} FOR UPDATE")
+                    .SingleOrDefaultAsync(cancellationToken)
+                : await dbContext.Tasks.SingleOrDefaultAsync(task => task.Id == taskId, cancellationToken);
+            var sourceWeek = ToMonday(request.WeekStartDate);
+            var sourceWorkspace = await dbContext.WeekWorkspaces.SingleOrDefaultAsync(
+                workspace => workspace.WeekStartDate == sourceWeek, cancellationToken);
+            if (original is null || sourceWorkspace is null || original.WeekWorkspaceId != sourceWorkspace.Id)
+            {
+                return Results.NotFound(ApiErrorResponse.Create(
+                    "task.not_found", "Task was not found in the selected week.", httpContext.TraceIdentifier));
+            }
+
+            if (request.StartDate > request.EndDate)
+            {
+                throw new ArgumentException("Start date must be on or before end date.", nameof(request));
+            }
+            if (request.Title?.Trim().Length > 200 || request.Notes?.Trim().Length > 4000)
+            {
+                throw new ArgumentException("Task title must not exceed 200 characters and notes must not exceed 4000 characters.");
+            }
+            // Validate every submitted field before changing any tracked entity or workspace.
+            _ = TaskItem.Create(original.WeekWorkspaceId, ToMonday(request.StartDate), request.Title!,
+                request.StartDate, request.Notes, request.Status, request.ExecutionTime, batchId);
+
+            var originalDate = original.DayDate is { } day && day >= request.StartDate && day <= request.EndDate
+                ? day : request.StartDate;
+            var sourceDate = original.DayDate;
+            var sourceWorkspaceId = original.WeekWorkspaceId;
+            if (sourceDate != originalDate)
+            {
+                // Free the final source indices before EF writes the compaction in arbitrary
+                // primary-key order. PostgreSQL enforces lane uniqueness per statement.
+                var sourceLane = await GetOrderedLaneAsync(dbContext, sourceWorkspaceId, sourceDate, cancellationToken);
+                var temporaryStart = (long)sourceLane.Max(task => task.OrderIndex) + sourceLane.Count + 1;
+                if (temporaryStart + sourceLane.Count - 1 > int.MaxValue)
+                {
+                    return Results.Conflict(ApiErrorResponse.Create(
+                        "task.recurring.conflict", "The source lane cannot be safely reindexed.", httpContext.TraceIdentifier));
+                }
+                for (var index = 0; index < sourceLane.Count; index++)
+                {
+                    sourceLane[index].SetOrderIndex((int)(temporaryStart + index));
+                }
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+            var tasks = new List<TaskItem>();
+            var workspaces = new Dictionary<DateOnly, WeekWorkspace>();
+            for (var dayNumber = request.StartDate.DayNumber; dayNumber <= request.EndDate.DayNumber; dayNumber++)
+            {
+                var date = DateOnly.FromDayNumber(dayNumber);
+                var week = ToMonday(date);
+                if (!workspaces.TryGetValue(week, out var workspace))
+                {
+                    workspace = await GetOrCreateWorkspaceAsync(dbContext, week, cancellationToken);
+                    workspaces.Add(week, workspace);
+                }
+
+                var orderIndex = await GetNextOrderIndexAsync(dbContext, workspace.Id, date, cancellationToken, original.Id);
+                TaskItem task;
+                if (date == originalDate)
+                {
+                    task = original;
+                    task.Update(week, request.Title!, date, request.Notes, request.Status, request.ExecutionTime);
+                    task.MoveTo(workspace.Id, week, date);
+                    task.AssignBatchId(batchId);
+                    if (sourceWorkspaceId != workspace.Id || sourceDate != date)
+                    {
+                        task.SetOrderIndex(orderIndex);
+                    }
+                }
+                else
+                {
+                    task = TaskItem.Create(workspace.Id, week, request.Title!, date,
+                        request.Notes, request.Status, request.ExecutionTime, batchId);
+                    task.SetOrderIndex(orderIndex);
+                    dbContext.Tasks.Add(task);
+                }
+                tasks.Add(task);
+            }
+
+            if (sourceWorkspaceId != original.WeekWorkspaceId || sourceDate != original.DayDate)
+            {
+                await NormalizeLaneAsync(dbContext, sourceWorkspaceId, sourceDate, original.Id, cancellationToken);
+            }
+            await dbContext.SaveChangesAsync(cancellationToken);
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
+
+            return Results.Created($"/api/v1/tasks/{taskId}/recurring",
+                ApiSuccessResponse<RecurringTasksResponse>.Create(
+                    ToRecurringTasksResponse(tasks, workspaces.Keys.Append(sourceWeek)), httpContext.TraceIdentifier));
+        }
+        catch (ArgumentException exception)
+        {
+            return Results.BadRequest(ApiErrorResponse.Create(
+                "task.validation", exception.Message, httpContext.TraceIdentifier));
+        }
+        catch (Exception exception) when (exception is DbUpdateException
+            || exception is PostgresException { SqlState: "40001" or "40P01" })
+        {
+            return Results.Conflict(ApiErrorResponse.Create(
+                "task.recurring.conflict", "The tasks changed. Retry the conversion with the same idempotency key.",
+                httpContext.TraceIdentifier));
+        }
+    }
+
+    private static async Task LockRecurringBatchAsync(
+        TaskManagerDbContext dbContext,
+        string batchId,
+        CancellationToken cancellationToken)
+    {
+        if (dbContext.Database.IsNpgsql())
+        {
+            var lockKey = "task-recurring:" + batchId;
+            await dbContext.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(hashtextextended({lockKey}, 0))", cancellationToken);
+        }
+    }
+
+    private static async Task<IEnumerable<DateOnly>> GetConversionAffectedWeeksAsync(
+        TaskManagerDbContext dbContext,
+        IReadOnlyList<TaskItem> tasks,
+        DateOnly sourceWeek,
+        CancellationToken cancellationToken)
+    {
+        var workspaceIds = tasks.Select(task => task.WeekWorkspaceId).Distinct().ToArray();
+        var weeks = await dbContext.WeekWorkspaces.Where(workspace => workspaceIds.Contains(workspace.Id))
+            .Select(workspace => workspace.WeekStartDate).ToListAsync(cancellationToken);
+        return weeks.Append(ToMonday(sourceWeek));
     }
 
     public async Task<IResult> ReorderTasksAsync(
