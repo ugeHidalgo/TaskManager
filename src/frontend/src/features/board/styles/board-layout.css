@@ -6,8 +6,8 @@
 .week-layout {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  padding: 1.5rem;
+  gap: 2px;
+  padding: 0;
   background-color: #f9fafb;
   min-height: calc(100vh - 60px);
 }
@@ -17,17 +17,22 @@
   display: flex;
   flex-direction: column;
   border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
+  border-radius: 0;
   background-color: #fff;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.week-section-header,
+.day-column-header {
+  min-height: 44px;
+  padding: 2px 8px;
 }
 
 .week-section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
   background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
   border-bottom: 2px solid #d1d5db;
 }
@@ -149,8 +154,8 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: 2px;
+  padding: 2px;
   min-height: 4rem;
 }
 
@@ -163,7 +168,7 @@
 .daily-columns {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 1rem;
+  gap: 1rem 0;
 }
 
 .week-layout.fullweek .daily-columns {
@@ -174,7 +179,7 @@
   display: flex;
   flex-direction: column;
   border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
+  border-radius: 0;
   background-color: #fff;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -189,7 +194,6 @@
 .day-column-header {
   display: flex;
   align-items: center;
-  padding: 0.75rem;
   background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
   border-bottom: 2px solid #fcd34d;
 }
@@ -587,9 +591,17 @@
 }
 
 .day-column-content {
-  padding: 0.75rem;
+  padding: 2px;
   min-height: 6rem;
   flex-grow: 1;
+}
+
+.day-column-content .task-item {
+  margin-bottom: 2px;
+}
+
+.day-column-content .task-item:last-child {
+  margin-bottom: 0;
 }
 
 /* Empty States */
@@ -616,7 +628,7 @@
 @media (max-width: 1024px) {
   .daily-columns {
     grid-template-columns: repeat(4, 1fr);
-    gap: 0.75rem;
+    row-gap: 0.75rem;
   }
 
   .day-column-content {
@@ -631,22 +643,7 @@
 @media (max-width: 640px) {
   .daily-columns {
     grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
-  }
-
-  .week-layout {
-    padding: 1rem;
-    gap: 1rem;
-  }
-
-  .week-section-header {
-    flex-direction: column;
-    gap: 0.5rem;
-    align-items: flex-start;
-  }
-
-  .day-column-header {
-    padding: 0.5rem;
+    row-gap: 0.5rem;
   }
 
   .day-column-title {

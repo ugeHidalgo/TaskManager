@@ -850,7 +850,7 @@ export function BoardPage() {
   }
 
   return (
-    <main className="screen">
+    <main className="screen board-screen">
       <header className="topbar">
         <div className="topbar-title-nav">
           <h1>{weekDisplay}</h1>
