@@ -18,7 +18,7 @@
   flex-direction: column;
   border: 1px solid #e5e7eb;
   border-radius: 0;
-  background-color: #fff;
+  background-color: #f9fafb;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
@@ -180,7 +180,7 @@
   flex-direction: column;
   border: 1px solid #e5e7eb;
   border-radius: 0;
-  background-color: #fff;
+  background-color: #f9fafb;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   transition: all 0.2s ease;
@@ -196,6 +196,24 @@
   align-items: center;
   background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
   border-bottom: 2px solid #fcd34d;
+}
+
+.week-section-header button {
+  background: #d1d5db;
+  color: #374151;
+}
+
+.week-section-header button:hover:not(:disabled) {
+  background: #b8bec7;
+}
+
+.day-column-header button {
+  background: #fcd34d;
+  color: #78350f;
+}
+
+.day-column-header button:hover:not(:disabled) {
+  background: #fbbf24;
 }
 
 .task-item {
