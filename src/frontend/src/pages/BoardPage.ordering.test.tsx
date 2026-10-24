@@ -390,8 +390,8 @@ describe("BoardPage ordering bug regressions", () => {
       );
       await user.click(screen.getByRole("menuitem", { name: "Move" }));
       await user.click(screen.getByRole("button", { name: "Go to next week" }));
-      const initialBoard = await http.pending("board", nextWeek);
-      const initialTasks = await http.pending("tasks", nextWeek);
+      const initialBoard = await http.pending("board", nextWeek, 0);
+      const initialTasks = await http.pending("tasks", nextWeek, 0);
       expect(screen.queryByText("Task moving")).not.toBeInTheDocument();
 
       await user.click(
@@ -404,6 +404,11 @@ describe("BoardPage ordering bug regressions", () => {
         snapshotVersion: "source-before-move",
       });
       await succeed(await http.pending("tasks", nextWeek, 1), destinationTasks);
+      await succeed(await http.pending("board", nextWeek, 1), {
+        weekStartDate: nextWeek,
+        lanes: [],
+        snapshotVersion: "destination-before-move",
+      });
       const request = await http.pending("move", week);
       expect(request.body).toMatchObject({
         sourceWeekStartDate: week,
@@ -411,7 +416,7 @@ describe("BoardPage ordering bug regressions", () => {
         destinationDayDate: null,
         destinationIndex: 0,
         sourceSnapshotVersion: "source-before-move",
-        destinationSnapshotVersion: snapshotHash(nextWeek, destinationTasks),
+        destinationSnapshotVersion: "destination-before-move",
       });
       if (outcome === "success") {
         await succeed(request, {
@@ -430,7 +435,7 @@ describe("BoardPage ordering bug regressions", () => {
       } else {
         await fail(request, 409);
         await succeed(await http.pending("tasks", nextWeek, 2), authoritative);
-        await succeed(await http.pending("board", nextWeek, 1), {
+        await succeed(await http.pending("board", nextWeek, 2), {
           weekStartDate: nextWeek,
           lanes: [],
           snapshotVersion: "reconciled-destination",

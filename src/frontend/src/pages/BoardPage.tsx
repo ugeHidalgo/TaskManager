@@ -446,13 +446,17 @@ export function BoardPage() {
         return;
       }
 
-      const destinationTasks =
-        destinationWeekStartDate === sourceWeekStartDate
-          ? sourceTasks
-          : await getTasksForWeek(
-              token,
-              new Date(`${destinationWeekStartDate}T00:00:00`),
-            );
+      let destinationTasks = sourceTasks;
+      let destinationBoard = sourceBoard;
+      if (destinationWeekStartDate !== sourceWeekStartDate) {
+        const destinationWeekDate = new Date(
+          `${destinationWeekStartDate}T00:00:00`,
+        );
+        [destinationTasks, destinationBoard] = await Promise.all([
+          getTasksForWeek(token, destinationWeekDate),
+          getBoardForWeek(token, destinationWeekDate),
+        ]);
+      }
       const destinationLaneTasks = sortTasks(
         destinationTasks.filter((task) => task.dayDate === destinationDayDate),
       );
@@ -466,10 +470,11 @@ export function BoardPage() {
       const destinationSnapshotVersion =
         destinationWeekStartDate === sourceWeekStartDate
           ? sourceSnapshotVersion
-          : await getWeekSnapshotVersion(
+          : (destinationBoard.snapshotVersion ??
+            (await getWeekSnapshotVersion(
               destinationWeekStartDate,
               destinationTasks,
-            );
+            )));
 
       if (!isCurrentMutation(operationId)) return;
 
