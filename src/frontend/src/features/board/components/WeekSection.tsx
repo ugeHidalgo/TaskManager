@@ -8,6 +8,9 @@ export interface WeekSectionProps {
   weekEnd: Date;
   /** Tasks or content to display in the week section */
   children?: ReactNode;
+  weekNavigation?: ReactNode;
+  headerActions?: ReactNode;
+  headerMessage?: ReactNode;
   disabled?: boolean;
   onAddTask?: () => void;
   onLaneDragOver?: (event: React.DragEvent<HTMLElement>) => void;
@@ -23,6 +26,9 @@ export interface WeekSectionProps {
  */
 export function WeekSection({
   children,
+  weekNavigation,
+  headerActions,
+  headerMessage,
   disabled = false,
   onAddTask,
   onLaneDragOver,
@@ -49,30 +55,37 @@ export function WeekSection({
       onDragLeave={onLaneDragLeave}
     >
       <header className="week-section-header">
-        <h2 id={headingId} className="week-section-title">
-          Week Tasks
-        </h2>
-        <button
-          type="button"
-          className="add-task-button"
-          disabled={disabled}
-          onClick={onAddTask}
-          aria-label="Add task to shared week"
-          title="Add task"
-        >
-          +
-        </button>
-        {onMoveHere ? (
+        <div className="week-section-heading">
+          <h2 id={headingId} className="week-section-title">
+            Week Tasks
+          </h2>
+          {weekNavigation}
+        </div>
+        {headerMessage}
+        <div className="week-section-actions">
+          {headerActions}
           <button
             type="button"
-            className="move-here-button"
-            data-move-here="true"
-            onClick={onMoveHere}
-            aria-label="Move here to shared week"
+            className="add-task-button"
+            disabled={disabled}
+            onClick={onAddTask}
+            aria-label="Add task to shared week"
+            title="Add task"
           >
-            Move here
+            +
           </button>
-        ) : null}
+          {onMoveHere ? (
+            <button
+              type="button"
+              className="move-here-button"
+              data-move-here="true"
+              onClick={onMoveHere}
+              aria-label="Move here to shared week"
+            >
+              Move here
+            </button>
+          ) : null}
+        </div>
       </header>
 
       <article

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DayColumn } from "./DayColumn";
 import { WeekLayout } from "./WeekLayout";
 import { WeekSection } from "./WeekSection";
+import { WeekNavigation } from "./WeekNavigation";
 
 const weekStart = new Date(2026, 6, 27);
 const weekEnd = new Date(2026, 7, 2);
@@ -17,6 +18,48 @@ const dayNames = [
 ];
 
 describe("WeekLayout", () => {
+  it("renders accessible week navigation beside Week Tasks and invokes each action", () => {
+    const onPreviousWeek = vi.fn();
+    const onCurrentWeek = vi.fn();
+    const onNextWeek = vi.fn();
+    render(
+      <WeekLayout
+        weekStart={weekStart}
+        weekEnd={weekEnd}
+        weekNavigation={
+          <WeekNavigation
+            onPreviousWeek={onPreviousWeek}
+            onCurrentWeek={onCurrentWeek}
+            onNextWeek={onNextWeek}
+          />
+        }
+      />,
+    );
+
+    const heading = screen.getByRole("heading", { name: "Week Tasks" });
+    const navigation = within(heading.parentElement!).getByRole("group", {
+      name: "Week navigation",
+    });
+    for (const name of ["previous", "current", "next"]) {
+      const button = within(navigation).getByRole("button", {
+        name: `Go to ${name} week`,
+      });
+      expect(button).toHaveAccessibleDescription(
+        name === "current"
+          ? "Return to current week"
+          : `${name === "previous" ? "Previous" : "Next"} week`,
+      );
+      expect(button.querySelector("svg")).toHaveAttribute(
+        "aria-hidden",
+        "true",
+      );
+      fireEvent.click(button);
+    }
+    expect(onPreviousWeek).toHaveBeenCalledOnce();
+    expect(onCurrentWeek).toHaveBeenCalledOnce();
+    expect(onNextWeek).toHaveBeenCalledOnce();
+  });
+
   it("renders week section", () => {
     render(<WeekLayout weekStart={weekStart} weekEnd={weekEnd} />);
 

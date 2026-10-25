@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -111,6 +112,17 @@ describe("BoardPage week navigation", () => {
 
     expect(screen.getAllByText(/^No tasks for /i)).toHaveLength(5);
 
+    const viewSelector = screen.getByRole("combobox", { name: "View" });
+    const actions = viewSelector.closest<HTMLElement>(".week-section-actions")!;
+    expect(actions.closest(".week-section-header")).not.toBeNull();
+    expect(within(actions).getByText("Signed in as admin")).toBeInTheDocument();
+    const logoutButton = within(actions).getByRole("button", {
+      name: "Logout",
+    });
+    expect(logoutButton.nextElementSibling).toBe(
+      within(actions).getByRole("button", { name: "Add task to shared week" }),
+    );
+
     await user.selectOptions(
       screen.getByRole("combobox", { name: "View" }),
       "fullweek",
@@ -162,6 +174,13 @@ describe("BoardPage week navigation", () => {
     const title = screen.getByRole("heading", { level: 1 });
     const initialTitle = title.textContent;
 
+    expect(title).toHaveClass("week-section-date");
+    expect(title.closest(".week-section-header")).not.toBeNull();
+    expect(title.previousElementSibling).toHaveAttribute(
+      "aria-label",
+      "Week navigation",
+    );
+    expect(title.closest(".topbar")).toBeNull();
     expect(initialTitle).toMatch(/\w{3} \d+ - \w{3} \d+/);
 
     await waitFor(() => {
@@ -935,6 +954,145 @@ describe("BoardPage week navigation", () => {
     ]);
     expect(savedExecutionTimes).toEqual(["09:30", "09:30", "09:30", "09:30"]);
     expect(storedTasks[0].status).toBe("Not Started");
+  });
+
+  it.each([false, true])(
+    "blinks a notice for 5 seconds then keeps it static for 5 seconds (updateFails=%s)",
+    async (updateFails) => {
+      const task = makeTask("notice-task", "Notice task", null);
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+        if (init?.method === "PUT") {
+          return new Response(
+            JSON.stringify(
+              updateFails
+                ? { error: { message: "Task could not be updated." } }
+                : { data: { ...task, status: "In Progress" } },
+            ),
+            { status: updateFails ? 500 : 200 },
+          );
+        }
+        return buildBoardResponseFromUrl(String(input), [task]);
+      });
+
+      const { unmount } = render(
+        <MemoryRouter>
+          <BoardPage />
+        </MemoryRouter>,
+      );
+      const checkbox = await screen.findByRole("checkbox", {
+        name: "Task 1: Start Notice task",
+      });
+
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      try {
+        await act(async () => {
+          fireEvent.click(checkbox);
+        });
+
+        const notice = screen.getByRole("status");
+        expect(notice).toHaveTextContent(
+          updateFails ? "Task could not be updated." : "Task started.",
+        );
+        expect(notice).toHaveAttribute("aria-live", "polite");
+        expect(notice).toHaveClass(
+          "save-message",
+          "save-message-status-change",
+        );
+        expect(notice.closest(".week-section-header")).toBe(
+          screen
+            .getByRole("heading", { level: 1 })
+            .closest(".week-section-header"),
+        );
+        expect(notice.parentElement).not.toBe(screen.getByRole("main"));
+
+        act(() => vi.advanceTimersByTime(4_999));
+        expect(notice).toBeInTheDocument();
+        expect(notice).toHaveClass("save-message-status-change");
+        act(() => vi.advanceTimersByTime(1));
+        expect(notice).toBeInTheDocument();
+        expect(notice).not.toHaveClass("save-message-status-change");
+        act(() => vi.advanceTimersByTime(4_999));
+        expect(notice).toBeInTheDocument();
+        expect(notice).not.toHaveClass("save-message-status-change");
+        act(() => vi.advanceTimersByTime(1));
+        expect(screen.queryByRole("status")).toBeNull();
+      } finally {
+        unmount();
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it("restarts the lifetime and animation for an identical repeated notice", async () => {
+    const task = makeTask("repeat-task", "Repeated notice task", null);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      buildBoardResponseFromUrl(String(input), [task]),
+    );
+    const { unmount } = render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+    const card = (await screen.findByText(task.title)).closest(".task-item")!;
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      fireEvent.dragStart(card);
+      fireEvent.drop(card);
+      const firstNotice = screen.getByRole("status");
+      const message = firstNotice.textContent;
+      act(() => vi.advanceTimersByTime(7_000));
+      expect(firstNotice).not.toHaveClass("save-message-status-change");
+
+      fireEvent.dragStart(card);
+      fireEvent.drop(card);
+      const repeatedNotice = screen.getByRole("status");
+      expect(repeatedNotice).toHaveTextContent(message!);
+      expect(repeatedNotice).not.toBe(firstNotice);
+      expect(firstNotice).not.toBeInTheDocument();
+      expect(repeatedNotice).toHaveClass("save-message-status-change");
+      expect(vi.getTimerCount()).toBe(1);
+
+      act(() => vi.advanceTimersByTime(5_000));
+      expect(repeatedNotice).toBeInTheDocument();
+      expect(repeatedNotice).not.toHaveClass("save-message-status-change");
+      act(() => vi.advanceTimersByTime(4_999));
+      expect(repeatedNotice).toBeInTheDocument();
+      expect(repeatedNotice).not.toHaveClass("save-message-status-change");
+      act(() => vi.advanceTimersByTime(1));
+      expect(screen.queryByRole("status")).toBeNull();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      unmount();
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears the pending notice timeout on unmount", async () => {
+    const task = makeTask("cleanup-task", "Notice cleanup task", null);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+      buildBoardResponseFromUrl(String(input), [task]),
+    );
+    const { unmount } = render(
+      <MemoryRouter>
+        <BoardPage />
+      </MemoryRouter>,
+    );
+    const card = (await screen.findByText(task.title)).closest(".task-item")!;
+
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      fireEvent.dragStart(card);
+      fireEvent.drop(card);
+      expect(screen.getByRole("status")).toBeInTheDocument();
+      expect(vi.getTimerCount()).toBe(1);
+
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      unmount();
+      vi.useRealTimers();
+    }
   });
 
   it("prevents editing a task while its completion update is pending", async () => {

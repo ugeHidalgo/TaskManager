@@ -15,6 +15,9 @@ export interface WeekLayoutProps {
   weekEnd: Date;
   /** Tasks for the week section */
   weekContent?: ReactNode;
+  weekNavigation?: ReactNode;
+  headerActions?: ReactNode;
+  headerMessage?: ReactNode;
   /** Tasks per day, indexed by day number (0=Monday, 6=Sunday) */
   dayContent?: ReactNode[];
   /** Number of day columns to display */
@@ -53,6 +56,9 @@ export function WeekLayout({
   weekStart,
   weekEnd,
   weekContent,
+  weekNavigation,
+  headerActions,
+  headerMessage,
   dayContent,
   viewMode = "workweek",
   taskActionsDisabled = false,
@@ -85,6 +91,9 @@ export function WeekLayout({
       <WeekSection
         weekStart={weekStart}
         weekEnd={weekEnd}
+        weekNavigation={weekNavigation}
+        headerActions={headerActions}
+        headerMessage={headerMessage}
         disabled={taskActionsDisabled}
         onAddTask={() => onAddTask?.(null)}
         onLaneDragOver={onWeekLaneDragOver}

@@ -30,9 +30,10 @@
 }
 
 .week-section-header {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
+  gap: 8px;
   background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
   border-bottom: 2px solid #d1d5db;
 }
@@ -137,17 +138,56 @@
   line-height: 1;
 }
 
-.week-section-title {
+.week-section-title,
+.week-section-date {
   font-size: 1.125rem;
   font-weight: 600;
   color: #1f2937;
   margin: 0;
 }
 
-.week-section-date {
-  font-size: 0.875rem;
-  color: #6b7280;
-  font-weight: 500;
+.week-section-heading {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.week-section-actions {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 0.85rem;
+}
+
+.week-section-actions label,
+.week-section-actions select,
+.week-section-actions button {
+  font-size: inherit;
+}
+
+.week-section-actions select {
+  max-width: 100%;
+}
+
+.week-section-actions button {
+  padding: 4px 8px;
+  min-height: 30px;
+}
+
+.week-section-actions .add-task-button {
+  margin-left: 0;
+  font-size: 1.25rem;
 }
 
 .week-section-content {
@@ -552,13 +592,34 @@
 }
 
 .save-message {
-  margin: 0 0 1rem;
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+  min-width: 0;
+  text-align: center;
+  overflow-wrap: anywhere;
+  font-size: 20px;
   color: #166534;
-  font-weight: 600;
+  font-weight: 700;
+}
+
+.save-message:not(.save-message-status-change) {
+  opacity: 1;
+  animation: status-message-fade-out 1s ease-out 4s forwards;
 }
 
 .save-message-status-change {
-  animation: status-message-blink 1s step-end 10;
+  animation: status-message-blink 1s step-end 5;
+}
+
+@keyframes status-message-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes status-message-blink {
@@ -583,7 +644,8 @@
     animation: none;
   }
 
-  .save-message-status-change {
+  .save-message-status-change,
+  .save-message:not(.save-message-status-change) {
     animation: none;
   }
 
@@ -643,6 +705,21 @@
 }
 
 /* Responsive Design */
+@media (max-width: 1200px) {
+  .week-section-header {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .week-section-actions {
+    grid-column: 2;
+  }
+
+  .save-message {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
 @media (max-width: 1024px) {
   .daily-columns {
     grid-template-columns: repeat(4, 1fr);
@@ -659,6 +736,15 @@
 }
 
 @media (max-width: 640px) {
+  .week-section-heading,
+  .week-section-actions {
+    grid-column: 1 / -1;
+  }
+
+  .week-section-actions {
+    grid-row: 3;
+  }
+
   .daily-columns {
     grid-template-columns: repeat(2, 1fr);
     row-gap: 0.5rem;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { sha256 } from "js-sha256";
 import { useNavigate } from "react-router-dom";
 import {
@@ -17,6 +17,7 @@ import {
   type TaskPayload,
 } from "../api/board";
 import { useAuth } from "../auth/useAuth";
+import { WeekNavigation } from "../features/board/components/WeekNavigation";
 import {
   TaskEditor,
   WeekLayout,
@@ -31,7 +32,6 @@ import {
 import { getToken } from "../lib/session";
 
 const BOARD_VIEW_MODE_KEY = "taskmanager.boardViewMode";
-type StatusMessagePhase = "blinking" | "static" | null;
 type PendingMove = {
   taskId: string;
   title: string;
@@ -94,9 +94,39 @@ export function BoardPage() {
   const [editorDayDate, setEditorDayDate] = useState<Date | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [statusMessagePhase, setStatusMessagePhase] =
-    useState<StatusMessagePhase>(null);
+  const [saveNotice, setSaveNotice] = useState<{
+    message: string;
+    generation: number;
+    blinking: boolean;
+  } | null>(null);
+  const saveMessageTimeout = useRef<number | null>(null);
+  const saveMessageGeneration = useRef(0);
+  const setSaveMessage = useCallback((message: string | null) => {
+    if (saveMessageTimeout.current !== null) {
+      window.clearTimeout(saveMessageTimeout.current);
+      saveMessageTimeout.current = null;
+    }
+
+    if (message === null) {
+      setSaveNotice(null);
+      return;
+    }
+
+    setSaveNotice({
+      message,
+      generation: ++saveMessageGeneration.current,
+      blinking: true,
+    });
+    saveMessageTimeout.current = window.setTimeout(() => {
+      setSaveNotice((notice) =>
+        notice ? { ...notice, blinking: false } : null,
+      );
+      saveMessageTimeout.current = window.setTimeout(() => {
+        setSaveNotice(null);
+        saveMessageTimeout.current = null;
+      }, 5_000);
+    }, 5_000);
+  }, []);
   const { weekStart, weekEnd } = useWeekCalculation(selectedDate);
   const weekStartDateParam = formatDateOnly(weekStart);
   const weekDisplay = formatWeekDisplay(weekStart, weekEnd);
@@ -105,31 +135,13 @@ export function BoardPage() {
     () => () => {
       boardGeneration.current += 1;
       activeMutationId.current = null;
+      if (saveMessageTimeout.current !== null) {
+        window.clearTimeout(saveMessageTimeout.current);
+        saveMessageTimeout.current = null;
+      }
     },
     [],
   );
-
-  useEffect(() => {
-    if (statusMessagePhase === "blinking") {
-      const timeoutId = window.setTimeout(
-        () => setStatusMessagePhase("static"),
-        10_000,
-      );
-
-      return () => window.clearTimeout(timeoutId);
-    }
-
-    if (statusMessagePhase === "static") {
-      const timeoutId = window.setTimeout(() => {
-        setSaveMessage(null);
-        setStatusMessagePhase(null);
-      }, 5_000);
-
-      return () => window.clearTimeout(timeoutId);
-    }
-
-    return undefined;
-  }, [statusMessagePhase]);
 
   useEffect(() => {
     if (!activeTaskMenuId && !pendingMove && !draggedTask) {
@@ -313,7 +325,6 @@ export function BoardPage() {
     const move = pendingMove;
     setPendingMove(null);
     setSaveMessage(`Move canceled for “${move.title}”.`);
-    setStatusMessagePhase(null);
     if (restoreFocus) focusTask(move.taskId, getLaneKey(move.sourceDayDate));
   }
 
@@ -321,7 +332,6 @@ export function BoardPage() {
     setDraggedTask(null);
     setDropTarget(null);
     setSaveMessage("Drag canceled. The task has not moved.");
-    setStatusMessagePhase(null);
     focusTask(taskId);
   }
 
@@ -360,7 +370,6 @@ export function BoardPage() {
     setSaveMessage(
       `${conflict ? "The board changed. " : ""}${message} ${refreshed ? "The latest board has been loaded." : "Reload the board before trying again."}`,
     );
-    setStatusMessagePhase(null);
   }
 
   function getDotNetUtcTicks(value: string): string {
@@ -506,7 +515,6 @@ export function BoardPage() {
       }
 
       setSaveMessage("Task moved.");
-      setStatusMessagePhase(null);
     } catch (error) {
       await reconcileMutation(operationId, error, previousTasks);
     } finally {
@@ -640,7 +648,6 @@ export function BoardPage() {
       setLoadedWeekStartDate(weekStartDateParam);
       setSnapshotVersion(nextVersion);
       setSaveMessage("Task order updated.");
-      setStatusMessagePhase(null);
     } catch (error) {
       await reconcileMutation(operationId, error, previousTasks);
     } finally {
@@ -671,7 +678,6 @@ export function BoardPage() {
     setDraggedTask(null);
     setDropTarget(null);
     setSaveMessage(message);
-    setStatusMessagePhase(null);
     focusTask(taskId);
   }
 
@@ -686,7 +692,6 @@ export function BoardPage() {
     setEditorDayDate(dayDate);
     setEditorError(null);
     setSaveMessage(null);
-    setStatusMessagePhase(null);
   }
 
   function closeTaskEditor() {
@@ -724,7 +729,6 @@ export function BoardPage() {
             ? `${result.createdCount} tasks in recurring batch.`
             : `${result.createdCount} tasks created.`,
         );
-        setStatusMessagePhase(null);
         return;
       } else if (editorTask) {
         await updateTask(token, editorTask.id, input);
@@ -737,7 +741,6 @@ export function BoardPage() {
       setSnapshotVersion(null);
       closeTaskEditor();
       setSaveMessage(editorTask ? "Task updated." : "Task created.");
-      setStatusMessagePhase(null);
     } catch (error) {
       setEditorError(
         error instanceof Error ? error.message : "Could not save the task.",
@@ -780,9 +783,7 @@ export function BoardPage() {
               ? "Task marked not done."
               : "Task reopened.",
       );
-      setStatusMessagePhase("blinking");
     } catch (error) {
-      setStatusMessagePhase(null);
       setSaveMessage(
         error instanceof Error
           ? error.message
@@ -820,7 +821,6 @@ export function BoardPage() {
       setTasks(authoritativeTasks);
       setSnapshotVersion(board.snapshotVersion ?? null);
       setSaveMessage("Task deleted.");
-      setStatusMessagePhase(null);
     } catch (error) {
       if (generation !== boardGeneration.current) return;
       setSaveMessage(
@@ -828,7 +828,6 @@ export function BoardPage() {
           ? error.message
           : "Could not delete the task. Please try again.",
       );
-      setStatusMessagePhase(null);
     } finally {
       setPendingDeleteTaskIds((current) => {
         const next = new Set(current);
@@ -851,68 +850,6 @@ export function BoardPage() {
 
   return (
     <main className="screen board-screen">
-      <header className="topbar">
-        <div className="topbar-title-nav">
-          <h1>{weekDisplay}</h1>
-          <div className="week-nav" role="group" aria-label="Week navigation">
-            <button
-              type="button"
-              onClick={handlePreviousWeek}
-              aria-label="Go to previous week"
-              title="Previous Week"
-              className="nav-arrow-btn"
-            >
-              ◄
-            </button>
-            <button
-              type="button"
-              onClick={handleCurrentWeek}
-              aria-label="Go to current week"
-              title="Actual Week"
-              className="nav-arrow-btn nav-square-btn"
-            >
-              ■
-            </button>
-            <button
-              type="button"
-              onClick={handleNextWeek}
-              aria-label="Go to next week"
-              title="Next Week"
-              className="nav-arrow-btn"
-            >
-              ►
-            </button>
-          </div>
-        </div>
-        <div className="topbar-actions">
-          <label htmlFor="board-view-mode">View</label>
-          <select
-            id="board-view-mode"
-            value={viewMode}
-            onChange={(event) =>
-              handleViewModeChange(event.target.value as BoardViewMode)
-            }
-          >
-            <option value="workweek">Workweek (Mon-Fri)</option>
-            <option value="fullweek">Full week (Mon-Sun)</option>
-          </select>
-          <span className="muted">Signed in as {username ?? "unknown"}</span>
-          <button type="button" onClick={handleLogout}>
-            Logout
-          </button>
-        </div>
-      </header>
-
-      {saveMessage ? (
-        <p
-          className={`save-message${statusMessagePhase === "blinking" ? " save-message-status-change" : ""}`}
-          role="status"
-          aria-live="polite"
-        >
-          {saveMessage}
-        </p>
-      ) : null}
-
       {pendingMove ? (
         <div className="pending-move-flow" role="status" aria-live="polite">
           <span>Moving “{pendingMove.title}”. Choose a destination lane.</span>
@@ -930,6 +867,47 @@ export function BoardPage() {
       <WeekLayout
         weekStart={weekStart}
         weekEnd={weekEnd}
+        headerMessage={
+          saveNotice ? (
+            <p
+              key={saveNotice.generation}
+              className={`save-message${saveNotice.blinking ? " save-message-status-change" : ""}`}
+              role="status"
+              aria-live="polite"
+            >
+              {saveNotice.message}
+            </p>
+          ) : null
+        }
+        weekNavigation={
+          <>
+            <WeekNavigation
+              onPreviousWeek={handlePreviousWeek}
+              onCurrentWeek={handleCurrentWeek}
+              onNextWeek={handleNextWeek}
+            />
+            <h1 className="week-section-date">{weekDisplay}</h1>
+          </>
+        }
+        headerActions={
+          <>
+            <label htmlFor="board-view-mode">View</label>
+            <select
+              id="board-view-mode"
+              value={viewMode}
+              onChange={(event) =>
+                handleViewModeChange(event.target.value as BoardViewMode)
+              }
+            >
+              <option value="workweek">Workweek (Mon-Fri)</option>
+              <option value="fullweek">Full week (Mon-Sun)</option>
+            </select>
+            <span className="muted">Signed in as {username ?? "unknown"}</span>
+            <button type="button" onClick={handleLogout}>
+              Logout
+            </button>
+          </>
+        }
         viewMode={viewMode}
         taskActionsDisabled={disableTaskActions}
         laneDropFeedback={dropTarget?.taskId === null ? dropTarget : undefined}
